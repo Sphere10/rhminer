@@ -18,6 +18,7 @@
 #include "precomp.h"
 #include "MinersLib/Global.h"
 #include "corelib/utils.h"
+#include "BuildInfo.h"
 #include <cstdlib>
 #include <iostream>
 #include <boost/bind.hpp>
@@ -147,6 +148,7 @@ void ProcessMinerFile(Json::Value responseObject, socket_ptr sock)
     }
 }
 
+//TODO: provide a return string buffer
 void ProcessJsonApi(Json::Value responseObject, socket_ptr sock)
 {
     try
@@ -160,6 +162,15 @@ void ProcessJsonApi(Json::Value responseObject, socket_ptr sock)
                 string webData;
                 g_miniwebMutex->lock();
                 webData = g_ethMandata;
+                g_miniwebMutex->unlock();
+                webData += "\n";
+                boost::asio::write(*sock, boost::asio::buffer(webData, webData.length()));
+            }
+            if (method == "miner_getstat")
+            {
+                string webData;
+                g_miniwebMutex->lock();
+                webData = g_webdata;
                 g_miniwebMutex->unlock();
                 webData += "\n";
                 boost::asio::write(*sock, boost::asio::buffer(webData, webData.length()));
@@ -248,8 +259,83 @@ void MiniWeb_Connection(socket_ptr sock)
             g_miniwebMutex->lock();
             webData = g_webdata;
             g_miniwebMutex->unlock();
-            webData += "\n";
+
+            //Handle http / Websocket requests
+            if (stristr(data, "HTTP/1.1"))
+            {
+                char tstr[128];
+                GetSysTimeStrF(tstr, sizeof(tstr), "%D %M %Y %H:%M:%S");
+
+                //Handle websocket requests
+                if (strstr(data, "Content-Type:") && (stristr(data, "application/json") || stristr(data, "x-www-form-urlencoded")))
+                {
+                    //goto body
+                    char* body = stristr(data, "\r\n\r\n");
+                    if (body)
+                    {
+                        validJson = true;
+                        try
+                        {
+                            string function = body + 4;
+                            if (function[0] == '\'')
+                            {
+                                function.erase(function.begin());
+                                auto c = std::find(function.rbegin(), function.rend(), '\'');
+                                function.erase((c+1)._Get_current(), function.end());
+                            }
+                            Json::Reader reader;
+                            validJson = reader.parse(function, responseObject);
+                        }
+                        catch (...)
+                        {
+                            validJson = false;
+                        }
+
+                        if (validJson)
+                        {
+                            //TODO add return string buffer to ProcessJsonApi
+                            ProcessJsonApi(responseObject, sock);
+                            sock->close();
+                            return;
+                        }
+                        else
+                            webData = "{ \"result\": null, \"error\" : \"Invalid function\", \"id\" : 1 }";
+                    }
+                }
+                else
+                {
+                    string resp = FormatString(
+                        "HTTP/1.1 200 OK\r\n"
+                        "Date: %s\r\n"
+                        "Server : Apache / 2.2.14 (Win32)\r\n"
+                        "Content - Length : %d\r\n"
+                        "Content - Type : text / html\r\n"
+                        "Connection : Closed\r\n\r\n"
+                        "<html><body><h1>"
+                        "rhminer v%s beta for CPU</h1><br>"
+                        "<h2>Build: %s %s on %s at %s <br><br></h2>"
+                        "<h4>%s</h4><br><br>"
+                        "<a href=\"https://github.com/polyminer1/rhminer\">Source code</a>&emsp;"
+                        "<a href=\"https://github.com/polyminer1/rhminer/blob/master/Release/API.txt\">API Documentation</a>&emsp;"
+                        "<a href=\"https://github.com/polyminer1/rhminer/releases\">Download new version</a>&emsp;"
+                        "<br><br><br><br>by polyminer1"
+                        "</body></html>\r\n",
+                        tstr,
+                        webData.length(),
+                        RH_PROJECT_VERSION,
+                        RH_OS_NAME, RH_BUILD_TYPE, __DATE__, __TIME__,
+                        webData.c_str());
+                    webData = resp;
+                }
+            }
+            else
+            {
+                //ethman behavior
+                webData += "\n";
+            }
+
             boost::asio::write(*sock, boost::asio::buffer(webData, webData.length()));
+            sock->close();
         }
     }
     catch (std::exception& e)

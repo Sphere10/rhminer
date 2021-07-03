@@ -534,6 +534,7 @@ inline void Ripemd160RoundFunction(uint32_t* data, uint32_t* state)
 
 void RandomHash_RIPEMD160(RH_StridePtr roundInput, RH_StridePtr output)
 {       
+    // optimized algo
     RH_ALIGN(64) uint32_t state[5] = { 0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0 };
     RandomHash_MD_BASE_MAIN_LOOP(RIPEMD160_BLOCK_SIZE, Ripemd160RoundFunction, uint64_t);
     

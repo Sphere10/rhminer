@@ -7,6 +7,7 @@
 #ifndef _WRAPAMDSYSFS_H_
 #define _WRAPAMDSYSFS_H_
 
+#ifndef RH_COMPILE_CPU_ONLY
 typedef struct {
 	int sysfs_gpucount;
 	int *card_sysfs_device_id;  /* map cardidx to filesystem card idx */
@@ -21,5 +22,7 @@ int wrap_amdsysfs_get_gpucount(wrap_amdsysfs_handle *sysfsh, int *gpucount);
 int wrap_amdsysfs_get_tempC(wrap_amdsysfs_handle *sysfsh, int index, unsigned int *tempC);
 
 int wrap_amdsysfs_get_fanpcnt(wrap_amdsysfs_handle *sysfsh, int index, unsigned int *fanpcnt);
+
+#endif
 
 #endif

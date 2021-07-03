@@ -1,4 +1,6 @@
 #include "precomp.h"
+#ifndef RH_COMPILE_CPU_ONLY
+
 /*
 * Wrapper for ADL, inspired by wrapnvml from John E. Stone
 *
@@ -17,7 +19,7 @@ extern "C" {
 void* ADL_API_CALL ADL_Main_Memory_Alloc(int iSize)
 {
 	void* lpBuffer = malloc(iSize);
-	return lpBuffer;
+	return lpBuffer;Q
 }
 
 wrap_adl_handle * wrap_adl_create()
@@ -191,4 +193,6 @@ int wrap_adl_get_fanpcnt(wrap_adl_handle *adlh, int gpuindex, unsigned int *fanp
 
 #if defined(__cplusplus)
 }
+#endif
+
 #endif

@@ -538,6 +538,8 @@ inline void Ripemd320RoundFunction(uint32_t* data, uint32_t* state)
 
 void RandomHash_RIPEMD320(RH_StridePtr roundInput, RH_StridePtr output)
 {
+
+    // optimized algo
     RH_ALIGN(64) uint32_t state[10] = {
         0x67452301,
         0xEFCDAB89,

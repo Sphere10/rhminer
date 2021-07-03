@@ -14,7 +14,9 @@
  /// @file
  /// @copyright Polyminer1, QualiaLibre
 
-#define SHA3_512_MAX_BLOCK_SIZE (200 - (int32_t(32) * 2))  
+ //#include "RandomHash_core.h"
+
+#define SHA3_512_MAX_BLOCK_SIZE (200 - (int32_t(32) * 2))  //=136. Buffersize = 64K
 
 void SHA3_512_Transorm(const uint64_t *data, uint64_t* state, U32 BlockSize)
 {
@@ -2617,8 +2619,8 @@ void _RandomHash_SHA3_512(RH_StridePtr roundInput, RH_StridePtr output, uint64_t
 
     const uint64_t BlockSize = 200 - (int32_t(hashsize) * 2);
     
-    
-    RH_ALIGN(64) uint64_t state[26];
+    //init
+    RH_ALIGN(64) uint64_t state[/*25*/26];
     RH_memzero_of16(state, sizeof(state));
 
 	state[1] = uint64_t(-1);
@@ -2628,7 +2630,7 @@ void _RandomHash_SHA3_512(RH_StridePtr roundInput, RH_StridePtr output, uint64_t
 	state[17] = uint64_t(-1);
 	state[20] = uint64_t(-1);
 
-    
+    //body
     int64_t len = (int64_t)RH_STRIDE_GET_SIZE(roundInput);
     uint32_t padLen = (uint32_t)(len % BlockSize);
     uint32_t blockCount = (uint32_t)len / (uint32_t)BlockSize;
@@ -2642,7 +2644,7 @@ void _RandomHash_SHA3_512(RH_StridePtr roundInput, RH_StridePtr output, uint64_t
         blockCount--;
     }
 
-    
+    //finish
     {           
         memset(((uint8_t*)dataPtr) + padLen, 0, BlockSize-padLen);
 
@@ -2666,7 +2668,7 @@ void _RandomHash_SHA3_512(RH_StridePtr roundInput, RH_StridePtr output, uint64_t
 	state[12] = ~state[12];
 	state[17] = ~state[17];
 
-    
+    //get the hash result IN BE
     dataPtr = RH_STRIDE_GET_DATA64(output);
     uint64_t* statePtr = state;    
     RH_STRIDE_SET_SIZE(output, hashsize);

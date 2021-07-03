@@ -15,9 +15,9 @@
 /// @copyright Polyminer1
 
 #pragma once
-#include "MinersLib/Pascal/RandomHash_def.h"
-#include "MinersLib/Pascal/RandomHash_MurMur3_32_def.h"
-#include "MinersLib/Pascal/RandomHash_mersenne_twister.h"
+#include "MinersLib/RandomHash/RandomHash_def.h"
+#include "MinersLib/RandomHash/RandomHash_MurMur3_32_def.h"
+#include "MinersLib/RandomHash/RandomHash_mersenne_twister.h"
 
 enum RandomHash2Algos
 {
@@ -103,12 +103,11 @@ enum RandomHash2Algos
 
 //------------------------------------------------------------------------------------
 typedef U32* RH_StridePtr;
-
 #ifdef RHMINER_DEBUG_STRIDE_INTEGRITY_CHECK
     #define RH_STRIDE_GET_INDEX(strideVar)                  (0)
     #define RH_STRIDE_SET_INDEX(strideVar, val)             {}
-    #define RH_STRIDE_INIT_INTEGRITY(strideVar)         {U64* ic = (U64*)((strideVar)+RH_IDEAL_ALIGNMENT+RH_STRIDE_GET_SIZE(strideVar)); *ic = (U64)0xAABBCCDDEEFF5577LLU;}
-    #define RH_STRIDE_CHECK_INTEGRITY(strideVar)        {RH_ASSERT(*(U64*)((strideVar)+RH_IDEAL_ALIGNMENT+RH_STRIDE_GET_SIZE(strideVar)) == (U64)0xAABBCCDDEEFF5577LLU);}
+    #define RH_STRIDE_INIT_INTEGRITY(strideVar)         {U64* ic = (U64*)(reinterpret_cast<U8*>(strideVar)+RH_IDEAL_ALIGNMENT+RH_STRIDE_GET_SIZE(strideVar)); *ic = (U64)0xAABBCCDDEEFF5577LLU;}
+    #define RH_STRIDE_CHECK_INTEGRITY(strideVar)        {RH_ASSERT(*(U64*)(reinterpret_cast<U8*>(strideVar)+RH_IDEAL_ALIGNMENT+RH_STRIDE_GET_SIZE(strideVar)) == (U64)0xAABBCCDDEEFF5577LLU);}
 #else
     #define RH_STRIDE_GET_INDEX(strideVar)                  (0)
     #define RH_STRIDE_SET_INDEX(strideVar, val)             {}
@@ -122,7 +121,7 @@ typedef U32* RH_StridePtr;
 #define RH_STRIDE_SET_SIZE(strideVar, val)              {*strideVar = (U32)(val);}
 
 #define RH_STRIDE_RESET(strideVar)                       {*strideVar = 0;}
-#define RH_STRIDE_GET_DATA(strideVar)                    ((strideVar) + RH_IDEAL_ALIGNMENT32) 
+#define RH_STRIDE_GET_DATA(strideVar)                    ((strideVar) + RH_IDEAL_ALIGNMENT32) //reinterpret_cast<U8*>
 #define RH_STRIDE_GET_DATA8(strideVar)                   reinterpret_cast<U8*>((strideVar) + RH_IDEAL_ALIGNMENT32)
 #define RH_STRIDE_GET_DATA64(strideVar)                  reinterpret_cast<U64*>((strideVar) + RH_IDEAL_ALIGNMENT32)
 
@@ -131,10 +130,15 @@ typedef U32* RH_StridePtr;
 #define RH_STRIDEARRAY_SET_SIZE(strideArrayVar, val)    (strideArrayVar).size = (val);
 #define RH_STRIDEARRAY_GET_MAXSIZE(strideArrayVar)      (strideArrayVar).maxSize
 #define RH_STRIDEARRAY_GET_EXTRA(strideArrayVar, field) (strideArrayVar).field
-#define RH_STRIDEARRAY_RESET(strideArrayVar)            {(strideArrayVar).size = 0;}
+#ifdef RH2_STRIDE_PACKMODE
+    #define RH_STRIDEARRAY_RESET(strideArrayVar)            {(strideArrayVar).size = 0; (strideArrayVar).packedSize = 0;}
+#else
+    #define RH_STRIDEARRAY_RESET(strideArrayVar)            {(strideArrayVar).size = 0;}
+#endif
 #define RH_STRIDEARRAY_GET(strideArrayVar, idx)         (strideArrayVar).strides[idx]
 
 
+//strideItrator is the current stride in the for-loop
 #define RH_STRIDEARRAY_FOR_EACH_BEGIN(strideArrayVarSrc) \
     U32 cnt = RH_STRIDEARRAY_GET_SIZE(strideArrayVarSrc); \
     RH_ASSERT(RH_STRIDEARRAY_GET_SIZE(strideArrayVarSrc) <= RH2_StrideArrayCount); \
@@ -162,10 +166,24 @@ typedef U32* RH_StridePtr;
 struct RH_StrideArrayStruct
 {
     U32 size;
+#ifdef RHMINER_DEBUG_STRIDE_INTEGRITY_CHECK
+    RH_StridePtr strides[RH2_StrideArrayCount + 1];
+#else
     RH_StridePtr strides[RH2_StrideArrayCount];
+#endif    
+
+#ifdef RH2_STRIDE_PACKMODE
+    static const int MaxPackedData = 1024*96;
+    U32 packedSize;
+    U8  packedData[MaxPackedData];
+    U32 packedIdx[RH2_StrideArrayCount];
+    U32 packedSizes[RH2_StrideArrayCount];
+#endif
+
     U32 maxSize;
     U64 memoryboost;
     U64 supportsse41;
+
     RH_StrideArrayStruct() :size(0)
 #ifndef RH_DISABLE_RH_ASSERTS
     ,maxSize(RH2_StrideArrayCount)
@@ -175,6 +193,7 @@ struct RH_StrideArrayStruct
 typedef RH_StrideArrayStruct* RH_StrideArrayPtr;
 
 
+//common for the 3 RIPEMD
 PLATFORM_CONST uint32_t RH_RIPEMD_C1 = 0x50A28BE6;
 PLATFORM_CONST uint32_t RH_RIPEMD_C2 = 0x5A827999;
 PLATFORM_CONST uint32_t RH_RIPEMD_C3 = 0x5C4DD124;
@@ -207,6 +226,7 @@ struct SHA2_256_SavedState
 
 
 
+//byte swaps for algos
 
 inline void swap_copy_str_to_u32(const void *src, void *dest, const int32_t length)
 {
@@ -214,8 +234,10 @@ inline void swap_copy_str_to_u32(const void *src, void *dest, const int32_t leng
     uint8_t *lbsrc;
     int32_t	lLength;
 
+    // if all pointers and length are 32-bits aligned
     if (((int32_t((uint8_t *)(dest)-(uint8_t *)(0)) | ((uint8_t *)(src)-(uint8_t *)(0))  | length) & 3) == 0)
     {
+        // copy memory as 32-bit words
         lsrc = (uint32_t *)((uint8_t *)(src));
         lend = (uint32_t *)(((uint8_t *)(src)) + length);
         ldest = (uint32_t *)((uint8_t *)(dest));
@@ -224,8 +246,8 @@ inline void swap_copy_str_to_u32(const void *src, void *dest, const int32_t leng
             *ldest = RH_swap_u32(*lsrc);
             ldest += 1;
             lsrc += 1;
-        } 
-    } 
+        } // end while
+    } // end if
 
     else
     {
@@ -248,9 +270,10 @@ inline void swap_copy_str_to_u64(const void *src, void *dest, const int32_t leng
     uint8_t *lbsrc;
     int32_t	lLength;
 
-
+    // if all pointers and length are 64-bits aligned
     if (((int32_t((uint8_t *)(dest)-(uint8_t *)(0)) | ((uint8_t *)(src)-(uint8_t *)(0)) | length) & 7) == 0)
     {
+        // copy aligned memory block as 64-bit integers
         lsrc = (uint64_t *)((uint8_t *)(src));
         lend = (uint64_t *)(((uint8_t *)(src)) + length);
         ldest = (uint64_t *)((uint8_t *)(dest));
@@ -259,8 +282,8 @@ inline void swap_copy_str_to_u64(const void *src, void *dest, const int32_t leng
             *ldest = RH_swap_u64(*lsrc);
             ldest += 1;
             lsrc += 1;
-        } 
-    } 
+        } // end while
+    } // end if
     else
     {
         lbsrc = ((uint8_t *)(src));
@@ -272,8 +295,8 @@ inline void swap_copy_str_to_u64(const void *src, void *dest, const int32_t leng
 
             lbsrc += 1;
             dest_index += 1;
-        } 
-    } 
+        } // end while				
+    } // end else		
 }
 
 

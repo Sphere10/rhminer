@@ -96,15 +96,18 @@ void RandomHash_RadioGatun32(RH_StridePtr roundInput, RH_StridePtr output)
     int32_t  len = (int32_t)RH_STRIDE_GET_SIZE(roundInput);
     uint32_t *inData = RH_STRIDE_GET_DATA(roundInput);
     uint32_t blockCount = len / RADIOGATUN32_BLOCK_SIZE;
+    //init
     RH_memzero_of16(mill, sizeof(mill));
     RH_memzero_of16(belt, sizeof(belt));
 
+    //finish 0 (pre)
     uint32_t pre = len % RADIOGATUN32_BLOCK_SIZE;
 
     memset(((uint8_t*)inData) + len, 0, RADIOGATUN32_BLOCK_SIZE - pre);
     ((uint8_t*)inData)[len] = 0x01;
     blockCount++;
 
+    //update block
     while (blockCount > 0)
     {
         RH_ALIGN(64) uint32_t  data[RADIOGATUN32_BLOCK_SIZE];

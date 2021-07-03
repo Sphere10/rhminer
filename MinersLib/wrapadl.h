@@ -7,6 +7,8 @@
 #ifndef _WRAPADL_H_
 #define _WRAPADL_H_
 
+#ifndef RH_COMPILE_CPU_ONLY
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -137,4 +139,5 @@ int wrap_adl_get_fanpcnt(wrap_adl_handle *adlh, int gpuindex, unsigned int *fanp
 }
 #endif
 
+#endif
 #endif

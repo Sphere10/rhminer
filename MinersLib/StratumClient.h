@@ -21,7 +21,7 @@
 #include <boost/bind.hpp>
 #include <random>
 #include "MinersLib/Farm.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "MinersLib/Miner.h"
 #include "rhminer/CommandLineManager.h"
 #include "MinersLib/Global.h"
@@ -47,6 +47,7 @@ struct StratumInit
         string const & _port,
         string const & _user,
         string const & _pass,
+        string const & _coin,
         int const & _retries,
         string const & _email,
         bool _soloOvertStratum):f(_f),
@@ -54,6 +55,7 @@ struct StratumInit
                         port(_port),
                         user(_user),
                         pass(_pass),
+                        coin(_coin),
                         retries(_retries),
                         email(_email),
                         soloOverStratum(_soloOvertStratum){}
@@ -63,6 +65,7 @@ struct StratumInit
     string      port;
     string      user;
     string      pass;
+    string      coin;
     int         retries;
     int         worktimeout;
     string      email;
@@ -109,7 +112,7 @@ public:
     float               GetDiff() { return (float)m_nextWorkDifficulty; }
     
     virtual bool    Submit(SolutionSptr sol);
-    virtual void    InitializeWP(PascalWorkSptr wp);
+    virtual void    InitializeWP(WorkPackageSptr wp);
     bool            HandleMiningSubmitResponceResult(Json::Value& responseObject, string& errorStr, U64 lastMethodCallTime);
 
     //CPU mining stuff
@@ -118,9 +121,10 @@ public:
 
 protected:
     //interface
-    virtual void    PrepareWorkInternal(PascalWorkSptr wp);
+    virtual void    PrepareWorkInternal(WorkPackageSptr wp);
     virtual void    WorkLoop() override;
     virtual void    Preconnect();
+    virtual void    ProcessServerCommands();
     virtual string  ReadLineFromServer();
     virtual void    ProcessReponse(Json::Value& responseObject);
 
@@ -139,17 +143,16 @@ protected:
     virtual void RespondMiningSubmit(Json::Value& responseObject, U64 extraParam, U64 lastMethodCallTime);
     virtual void RespondSubscribe(Json::Value& responseObjec, U64 extraParam);
     
-    virtual void SendWorkToMiners(PascalWorkSptr wp);
-    virtual bool ValidateNewWork(PascalWorkSptr& work);
+    virtual void SendWorkToMiners(WorkPackageSptr wp);
+    virtual bool ValidateNewWork(WorkPackageSptr& work);
     
     U32 GetNewNonce2();
 
-    virtual PascalWorkSptr  InstanciateWorkPackage(PascalWorkSptr* cloneFrom = 0);
+    virtual WorkPackageSptr InstanciateWorkPackage(WorkPackageSptr* cloneFrom = 0);
     virtual U32             GetDefaultNonce2Size() { return 4; }
     virtual void            CallJsonMethod(string methodName, string params, U64 gpuIndexOrRigID = 0, string additionalCallParams = "", bool dontPutID = false);
     void                    MiningNotify(Json::Value& responseObject);
     void                    SetStratumDiff(float stratDiff);
-    void                    PrintDonationMsg();
 
 protected:
 	ServerCredential*   m_active;
@@ -184,6 +187,7 @@ protected:
 	string      m_email;
     string      m_lastActiveHost;
     bool        m_soloMining = false;
+    string      m_miningCoin;
     U32         m_workID; //  work_id++
     atomic_bool m_started;
 
@@ -217,8 +221,8 @@ protected:
     static const int            MaxBackLogCount = 12;
     
     std::mutex      m_currentWorkMutex;
-    PascalWorkSptr  m_current; //these are clones of the one sent to the miners
-    PascalWorkSptr  m_previous;//these are clones of the one sent to the miners
+    WorkPackageSptr  m_current; //these are clones of the one sent to the miners
+    WorkPackageSptr  m_previous;//these are clones of the one sent to the miners
 
     string          m_jsonrpcVersion;
     string          m_sessionID; // pool->sessionid
@@ -282,4 +286,31 @@ inline Json::Value JsonGetSafeArray(Json::Value& responseObject, const char* fie
         return Json::Value::null;
     }
 }
+
+
+//TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
+//GetWork fakeStrarum 
+class GetWorkerVNET : public StratumClient
+{
+public:
+    GetWorkerVNET(const StratumInit& initData) :StratumClient(initData) {}
+
+    //Hack to use Stratum to send getwork
+    virtual void WorkLoop() override;
+    virtual void CallMiningSubscribeMethod() {}
+    virtual void StopFarming() {}
+    virtual void Disconnect() {}
+    //virtual void StartWorking() {}
+    //virtual void Reconnect(U32 preSleepMS = 0) {}
+
+
+    //void ProcessMiningNotifySolo(Json::Value& jsondata)
+    void ProcessReponse(Json::Value& jsondata);
+    virtual void CallSubmit(SolutionSptr solution);
+
+protected:
+    U32 m_getWorkTimeSec = 0;
+};
+
+
 

@@ -54,7 +54,7 @@
     #if defined(__linux__)
         #define RH_OS_NAME "Linux"
     #elif defined(BSD)
-        #if defined(MACOS_X) || (defined(__APPLE__) & defined(__MACH__))
+        #if defined(IS_MAC_OS_X)
             #define RH_OS_NAME "MacOS"
         #elif defined(macintosh) || defined(Macintosh)
             #define RH_OS_NAME "Macintosh"

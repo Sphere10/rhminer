@@ -30,7 +30,7 @@
   # include <sys/endian.h>
 #elif defined(__OpenBSD__) || defined(__SVR4)
   # include <sys/types.h>
-#elif defined(MACOS_X) || (defined(__APPLE__) & defined(__MACH__))
+#elif defined(IS_MAC_OS_X)
   # include <machine/endian.h>
 #elif defined( BSD ) && (BSD >= 199103)
   # include <machine/endian.h>

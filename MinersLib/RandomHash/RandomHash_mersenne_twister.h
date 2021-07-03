@@ -32,6 +32,9 @@
 
 #define MERSENNE_TWISTER_SIZE 624
 
+#ifdef RHMINER_NO_SIMD
+    #define RH2_ENABLE_MERSSEN_INTERLEAVE
+#endif
 
 struct mersenne_twister_state 
 {
@@ -46,10 +49,10 @@ struct mersenne_twister_state
 #define  MERSENNE_TWISTER_DIFF      (MERSENNE_TWISTER_SIZE - MERSENNE_TWISTER_PERIOD)
 #define  MERSENNE_TWISTER_MAGIC     0x9908b0df
 
-#define M32(x) (0x80000000 & (x)) 
-#define L31(x) (0x7FFFFFFF & (x)) 
-#define M32_64pak(x) (0x80000000 & (U32)(x)) 
-#define L31_64pak(x) (0x7FFFFFFF & (U32)(x>>32)) 
+#define M32(x) (0x80000000 & (x)) // 32nd MSB
+#define L31(x) (0x7FFFFFFF & (x)) // 31 LSBs
+#define M32_64pak(x) (0x80000000 & (U32)(x)) // 32nd MSB
+#define L31_64pak(x) (0x7FFFFFFF & (U32)(x>>32)) // 31 LSBs
 
 
 #define UNROLL(expr) \
@@ -184,7 +187,8 @@ inline uint32_t merssen_twister_rand(mersenne_twister_state* state)
                 mt++; \
             }}
             
-#define RH_MERSSEN_TWISTER_MERGE_SSE { \
+#ifndef RHMINER_NO_SIMD
+    #define RH_MERSSEN_TWISTER_MERGE_SSE { \
             __m128i y,r0, r1; \
             __m128i c1 = _mm_cvtsi32_si128(0x9d2c5680);   \
             __m128i c2 = _mm_cvtsi32_si128(0xefc60000); \
@@ -214,6 +218,8 @@ inline uint32_t merssen_twister_rand(mersenne_twister_state* state)
 extern bool g_isSSE3Supported;
 extern bool g_isSSE4Supported;
 extern bool g_isAVX2Supported;
+#endif //NO_SIMD
+
 
 inline void merssen_twister_seed_fast(uint32_t value, mersenne_twister_state* state)
 {
@@ -245,6 +251,9 @@ inline uint32_t merssen_twister_rand_fast(mersenne_twister_state* state)
 {
     if (state->index == MERSENNE_TWISTER_SIZE)
     {
+        //#define M32(x) (0x80000000 & x) // 32nd MSB
+        //#define L31(x) (0x7FFFFFFF & x) // 31 LSBs
+
         size_t i = 0;
         uint32_t y;
         U32* mt;
@@ -264,6 +273,7 @@ inline uint32_t merssen_twister_rand_fast(mersenne_twister_state* state)
         }
         
         {
+            // i = 623, last step rolls over
             y = M32(state->MT[MERSENNE_TWISTER_SIZE - 1]) | L31(state->MT[0]);
             state->MT[MERSENNE_TWISTER_SIZE - 1] = state->MT[MERSENNE_TWISTER_PERIOD - 1] ^ (y >> 1) ^
                 (((int32_t(y) << 31) >> 31) & MERSENNE_TWISTER_MAGIC);
@@ -282,11 +292,14 @@ inline uint32_t merssen_twister_rand_fast(mersenne_twister_state* state)
             RH_MERSSEN_TWISTER_MERGE
     #else
         RH_MERSSEN_TWISTER_MERGE_SSE
-    #endif 
+    #endif //defined(RHMINER_COND_SSE4)
 #else
+
+#ifndef RHMINER_NO_SIMD
         if (g_isSSE3Supported)
             RH_MERSSEN_TWISTER_MERGE_SSE
         else
+#endif
             RH_MERSSEN_TWISTER_MERGE
 #endif    
         
@@ -304,12 +317,15 @@ inline uint32_t merssen_twister_rand_fast_partial_slow(mersenne_twister_state* s
         const U32 A = RHMINER_CEIL(MaxPrecalc, 4);
 
         {
+            //initialize
             const U32 Pe = RHMINER_CEIL(MaxPrecalc + 1 + MERSENNE_TWISTER_PERIOD, 4);
             const U32 Pb = MERSENNE_TWISTER_PERIOD;
             U32* mt = state->MT;
             
-#if defined(RH2_ENABLE_MERSSEN_INTERLEAVE) && !defined(RHMINER_NO_SSE4)
-
+            //interleaved
+#if defined(RH2_ENABLE_MERSSEN_INTERLEAVE) && (!defined(RHMINER_NO_SSE4) || defined(RHMINER_NO_SIMD)) 
+            //UP to A with future-constant interleaved
+            //U32 pval;
             U32 lval =  state->seed;
             U32 i = 1;
             mt = state->MT;
@@ -318,25 +334,31 @@ inline uint32_t merssen_twister_rand_fast_partial_slow(mersenne_twister_state* s
             while (i <= A)
             {
                 lval =  0x6c078965 * (lval ^ lval >> 30) + i;
+                //lval = pval;
                 *mt = lval;
                 i++;
                 mt += 2;
             }
+            //interleaving forward constants
             mt = state->MT + 1;
             while (i < Pb)
             {
                 lval = 0x6c078965 * (lval ^ lval >> 30) + i++;
+                //lval = pval;
             }
             while (i <= Pe)
             {
                 lval = 0x6c078965 * (lval ^ lval >> 30) + i++;
+                //lval = pval;
                 *mt = lval;
                 mt += 2;
             }
 
+            //seed
+            //y2 = state->MT[i];
             i = 0;
             mt = state->MT;
-            RH_PREFETCH_MEM(mt+4);
+            RH_PREFETCH_MEM(mt+4); 
             while (i < A)
             {
                 lval = M32(*mt);
@@ -359,7 +381,7 @@ inline uint32_t merssen_twister_rand_fast_partial_slow(mersenne_twister_state* s
             state->index = 0;            
 
 
-#else 
+#else // interleaved
             U32 lval =  state->seed;
             U32 i = 1;
             *mt = lval;
@@ -375,6 +397,7 @@ inline uint32_t merssen_twister_rand_fast_partial_slow(mersenne_twister_state* s
             while (i < Pb)
                 lval = 0x6c078965 * (lval ^ lval >> 30) + i++;
 
+            //seed
             U32 fval = lval;
             mt = state->MT;
             U32* end = mt + A;
@@ -416,7 +439,7 @@ inline uint32_t merssen_twister_rand_fast_partial_slow(mersenne_twister_state* s
                 }
             }
 
-#endif 
+#endif //interleaved
         }
 
     }
@@ -431,7 +454,7 @@ inline uint32_t merssen_twister_rand_fast_partial_slow(mersenne_twister_state* s
 
     U32 res = state->MT[state->index];
 
-#if defined(RH2_ENABLE_MERSSEN_INTERLEAVE) && !defined(RHMINER_NO_SSE4)
+#if defined(RH2_ENABLE_MERSSEN_INTERLEAVE) && (!defined(RHMINER_NO_SSE4) || defined(RHMINER_NO_SIMD)) 
     state->index += 2;
 #else
     state->index++;
@@ -465,6 +488,7 @@ inline uint32_t merssen_twister_rand_fast_partial_SSE4(mersenne_twister_state* s
     {
             U32* mt = state->MT;
 
+            //17x blocs
             RH_ASSERT((MaxPrecalc % 4) == 0);
             U32 pval = state->seed;
             U32 pval1, pval2, pvaln, i;
@@ -476,6 +500,8 @@ inline uint32_t merssen_twister_rand_fast_partial_SSE4(mersenne_twister_state* s
             MaxPrecalc += 8;
             for (i = 1; i < MaxPrecalc; )
             {
+                // --------- init ----------
+                //one group of 4
                 r1 = _mm_cvtsi32_si128(pval);
                 pval = 0x6c078965 * (pval ^ pval >> 30) + i++;
                 r1 = _mm_insert_epi32_M(r1, pval, 1);
@@ -483,11 +509,12 @@ inline uint32_t merssen_twister_rand_fast_partial_SSE4(mersenne_twister_state* s
                 r1 = _mm_insert_epi32_M(r1, pval, 2);
                 pval = 0x6c078965 * (pval ^ pval >> 30) + i++;
                 r1 = _mm_insert_epi32_M(r1, pval, 3);
-                pval = 0x6c078965 * (pval ^ pval >> 30) + i++; 
+                pval = 0x6c078965 * (pval ^ pval >> 30) + i++; //i+1 of the 4th element
                 
                 RH_MM_STORE128((__m128i*)mt, r1);
                 mt += 4;
             }
+            //goto future const
             while (i < MERSENNE_TWISTER_PERIOD)
             {
                 pval =  0x6c078965 * (pval ^ pval >> 30) + i++;
@@ -516,7 +543,9 @@ inline uint32_t merssen_twister_rand_fast_partial_SSE4(mersenne_twister_state* s
             r1 = RH_MM_LOAD128((__m128i*)mt);
             for (; i < MaxPrecalc; )
             {
-                
+                //RH_PREFETCH_MEM(mt+4);
+
+                //group #1 of N future constants
                 pval = 0x6c078965 * (pval ^ pval >> 30) + i++;
                 f1 = _mm_cvtsi32_si128(pval);
                 pval = 0x6c078965 * (pval ^ pval >> 30) + i++;
@@ -526,6 +555,9 @@ inline uint32_t merssen_twister_rand_fast_partial_SSE4(mersenne_twister_state* s
                 pval = 0x6c078965 * (pval ^ pval >> 30) + i++;
                 f1 = _mm_insert_epi32_M(f1, pval, 3);
 
+                //---------- seed ----------
+                // group 1 / N
+
 
                 RH_MT_ST_P(r1, f1, 0, 1);
                 RH_MT_ST_P(r1, f1, 1, 2);
@@ -534,12 +566,19 @@ inline uint32_t merssen_twister_rand_fast_partial_SSE4(mersenne_twister_state* s
                 r2 = RH_MM_LOAD128((__m128i*)(mt + 4));
                 RH_MT_ST_P_N(r1, r2, f1);
 
+                //__m128i c = _mm_cvtsi32_si128(0x9d2c5680);
+                //c = _mm_shuffle_epi32(c, 0);
+
                 f1 = _mm_srli_epi32(r1, 11);
                 r1 = _mm_xor_si128(r1, f1);
                 f1 = _mm_slli_epi32(r1, 7);
+                ////c = _mm_cvtsi32_si128(0x9d2c5680);
+                ////c = _mm_shuffle_epi32(c, 0);
                 f1 = _mm_and_si128(f1, c1);
                 r1 = _mm_xor_si128(r1, f1);
                 f1 = _mm_slli_epi32(r1, 15);
+                //c = _mm_cvtsi32_si128(0xefc60000);
+                //c = _mm_shuffle_epi32(c, 0);
                 f1 = _mm_and_si128(f1, c2);
                 r1 = _mm_xor_si128(r1, f1);
                 f1 = _mm_srli_epi32(r1, 18);
@@ -571,6 +610,7 @@ inline uint32_t merssen_twister_rand_fast_partial_SSE4(mersenne_twister_state* s
 
 inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state* state)
 {
+    //on 3 sse reg
     if (state->index == MERSENNE_TWISTER_SIZE)
     {
 #ifdef RH2_ENABLE_MERSSEN_12_SSE4
@@ -583,6 +623,8 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
         U32  pval, pval2, pvaln, ip1_l, f_last;
         pval = state->seed;
         
+        // --------- init ----------
+        //one group of 4
         r1 =  _mm_cvtsi32_si128(pval);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 1; 
         r1 = _mm_insert_epi32_M(r1, pval, 1);
@@ -590,8 +632,9 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
         r1 = _mm_insert_epi32_M(r1, pval, 2);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 3;
         r1 = _mm_insert_epi32_M(r1, pval, 3);
-        pval = 0x6c078965 * (pval ^ pval >> 30) + 4; 
+        pval = 0x6c078965 * (pval ^ pval >> 30) + 4; //i+1 of the 4th element
 
+        //one group of 4
         r2 = _mm_cvtsi32_si128(pval);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 5;
         r2 = _mm_insert_epi32_M(r2, pval, 1);
@@ -599,8 +642,9 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
         r2 = _mm_insert_epi32_M(r2, pval, 2);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 7;
         r2 = _mm_insert_epi32_M(r2, pval, 3);
-        pval = 0x6c078965 * (pval ^ pval >> 30) + 8; 
+        pval = 0x6c078965 * (pval ^ pval >> 30) + 8; //i+1 of the 4th element
 
+        //one group of 4
         r3 = _mm_cvtsi32_si128(pval);
         pval = 0x6c078965 * (pval^ pval>> 30) + 9;
         r3 = _mm_insert_epi32_M(r3, pval, 1);
@@ -608,8 +652,9 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
         r3 = _mm_insert_epi32_M(r3, pval, 2);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 11;
         r3 = _mm_insert_epi32_M(r3, pval, 3);
-        ip1_l = 0x6c078965 * (pval ^ pval >> 30) + 12; 
+        ip1_l = 0x6c078965 * (pval ^ pval >> 30) + 12; //i+1 of the 4th element
 
+        //jump to forward constant
         pval2 = 13;
         pval = ip1_l;
         while (pval2 <= MERSENNE_TWISTER_PERIOD)
@@ -617,6 +662,7 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
             pval =  0x6c078965 * (pval ^ pval >> 30) + pval2++;
         }        
 
+        //group #1 of 4 future constants
         f1 = _mm_cvtsi32_si128(pval);        
         pval = 0x6c078965 * (pval ^ pval >> 30) + 398;
         f1 = _mm_insert_epi32_M(f1, pval, 1);
@@ -626,6 +672,8 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
         f1 = _mm_insert_epi32_M(f1, pval, 3);
         f_last = pval;
 
+        //---------- seed ----------
+        // group 1
         RH_MT_ST(r1, f1, 0, 1);
         RH_MT_ST(r1, f1, 1, 2);
         RH_MT_ST(r1, f1, 2, 3);
@@ -633,12 +681,19 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
 
        
         {
+            //__m128i c = _mm_cvtsi32_si128(0x9d2c5680);
+            //c = _mm_shuffle_epi32(c, 0);
+
             f1 = _mm_srli_epi32(r1, 11);
             r1 = _mm_xor_si128(r1, f1);
             f1 = _mm_slli_epi32(r1, 7);
+            ////c = _mm_cvtsi32_si128(0x9d2c5680);
+            ////c = _mm_shuffle_epi32(c, 0);
             f1 = _mm_and_si128(f1, c1);
             r1 = _mm_xor_si128(r1, f1);
             f1 = _mm_slli_epi32(r1, 15);
+            //c = _mm_cvtsi32_si128(0xefc60000);
+            //c = _mm_shuffle_epi32(c, 0);
             f1 = _mm_and_si128(f1, c2);
             r1 = _mm_xor_si128(r1, f1);
             f1 = _mm_srli_epi32(r1, 18);
@@ -646,6 +701,7 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
             RH_MM_STORE128((__m128i*)state->MT + 0, r1);
         }
 
+        // group 2
         pval = 0x6c078965 * (f_last ^ f_last >> 30) + 401;
         f1 = _mm_cvtsi32_si128(pval);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 402;
@@ -662,12 +718,19 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
         RH_MT_ST_N(r2, r3, f1);
 
         {
+            //__m128i c = _mm_cvtsi32_si128(0x9d2c5680);
+            //c = _mm_shuffle_epi32(c, 0);
+
             f1 = _mm_srli_epi32(r1, 11);
             r1 = _mm_xor_si128(r1, f1);
             f1 = _mm_slli_epi32(r1, 7);
+            ////c = _mm_cvtsi32_si128(0x9d2c5680);
+            ////c = _mm_shuffle_epi32(c, 0);
             f1 = _mm_and_si128(f1, c1);
             r1 = _mm_xor_si128(r1, f1);
             f1 = _mm_slli_epi32(r1, 15);
+            //c = _mm_cvtsi32_si128(0xefc60000);
+            //c = _mm_shuffle_epi32(c, 0);
             f1 = _mm_and_si128(f1, c2);
             r1 = _mm_xor_si128(r1, f1);
             f1 = _mm_srli_epi32(r1, 18);
@@ -675,7 +738,8 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
             RH_MM_STORE128((__m128i*)&(state->MT[4]), r1);
         }
 
-        pval = 0x6c078965 * (f_last ^ f_last >> 30) + 405; 
+        // group 3
+        pval = 0x6c078965 * (f_last ^ f_last >> 30) + 405; //i+1 of the 4th element
         f1 = _mm_insert_epi32_M(f1, pval, 0);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 406;
         f1 = _mm_insert_epi32_M(f1, pval, 1);
@@ -695,12 +759,19 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
         r1 = _mm_insert_epi32_M(r1, pval, 3); 
 
         {
+            //__m128i c = _mm_cvtsi32_si128(0x9d2c5680);
+            //c = _mm_shuffle_epi32(c, 0);
+
             f1 = _mm_srli_epi32(r1, 11);
             r1 = _mm_xor_si128(r1, f1);
             f1 = _mm_slli_epi32(r1, 7);
+            ////c = _mm_cvtsi32_si128(0x9d2c5680);
+            ////c = _mm_shuffle_epi32(c, 0);
             f1 = _mm_and_si128(f1, c1);
             r1 = _mm_xor_si128(r1, f1);
             f1 = _mm_slli_epi32(r1, 15);
+            //c = _mm_cvtsi32_si128(0xefc60000);
+            //c = _mm_shuffle_epi32(c, 0);
             f1 = _mm_and_si128(f1, c2);
             r1 = _mm_xor_si128(r1, f1);
             f1 = _mm_srli_epi32(r1, 18);
@@ -728,6 +799,7 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
             while (i < Pb)
                 lval = 0x6c078965 * (lval ^ lval >> 30) + i++;
 
+            //seed
             U32 fval = lval;
             mt = state->MT;
             U32* end = mt + A;
@@ -768,7 +840,7 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
                     mt += 4;
                 }
             }
-#endif 
+#endif //RH2_ENABLE_MERSSEN_12_SSE4
         state->index = 0;
     }
 #ifdef _DEBUG
@@ -784,11 +856,12 @@ inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state
 }
 
 
-
+//#define merssen_twister_rand_fast_partial_4(S)  merssen_twister_rand_fast_partial_8_SSE4(S)
 #define merssen_twister_rand_fast_partial_4(S)  merssen_twister_rand_fast_partial_4_SSE4(S)
 
 inline uint32_t merssen_twister_rand_fast_partial_4_SSE4(mersenne_twister_state* state)
 {
+    //on 3 sse reg
     if (state->index == MERSENNE_TWISTER_SIZE)
     {
         __m128i f1,r1;
@@ -799,6 +872,8 @@ inline uint32_t merssen_twister_rand_fast_partial_4_SSE4(mersenne_twister_state*
         U32  pval, pval2, pvaln, ip1_l;
         pval = state->seed;
         
+        // --------- init ----------
+        //one group of 4
         r1 =  _mm_cvtsi32_si128(pval);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 1;
         r1 = _mm_insert_epi32_M(r1, pval, 1);
@@ -806,8 +881,9 @@ inline uint32_t merssen_twister_rand_fast_partial_4_SSE4(mersenne_twister_state*
         r1 = _mm_insert_epi32_M(r1, pval, 2);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 3;
         r1 = _mm_insert_epi32_M(r1, pval, 3);
-        ip1_l = 0x6c078965 * (pval ^ pval >> 30) + 4; 
+        ip1_l = 0x6c078965 * (pval ^ pval >> 30) + 4; //i+1 of the 4th element
 
+        //jump to forward constant
         pval2 = 5;
         pval = ip1_l;
         while (pval2 <= MERSENNE_TWISTER_PERIOD)
@@ -815,6 +891,7 @@ inline uint32_t merssen_twister_rand_fast_partial_4_SSE4(mersenne_twister_state*
             pval = 0x6c078965 * (pval ^ pval >> 30) + pval2++;
         }
 
+        //one group of 4 future constants
         f1 = _mm_cvtsi32_si128(pval);        
         pval = 0x6c078965 * (pval ^ pval >> 30) + 398;
         f1 = _mm_insert_epi32_M(f1, pval, 1);
@@ -823,6 +900,8 @@ inline uint32_t merssen_twister_rand_fast_partial_4_SSE4(mersenne_twister_state*
         pval = 0x6c078965 * (pval ^ pval >> 30) + 400;
         f1 = _mm_insert_epi32_M(f1, pval, 3);
 
+        //---------- seed ----------
+        //seed
         RH_MT_ST(r1, f1, 0, 1);
         RH_MT_ST(r1, f1, 1, 2);
         RH_MT_ST(r1, f1, 2, 3);
@@ -836,9 +915,13 @@ inline uint32_t merssen_twister_rand_fast_partial_4_SSE4(mersenne_twister_state*
         f1 = _mm_srli_epi32(r1, 11); 
         r1 = _mm_xor_si128(r1, f1); 
         f1 = _mm_slli_epi32(r1, 7);
+        //c = _mm_cvtsi32_si128(0x9d2c5680);
+        //c = _mm_shuffle_epi32(c, 0);
         f1 = _mm_and_si128(f1, c1); 
         r1 = _mm_xor_si128(r1, f1); 
         f1 = _mm_slli_epi32(r1, 15); 
+        //c = _mm_cvtsi32_si128(0xefc60000);
+        //c = _mm_shuffle_epi32(c, 0);
         f1 = _mm_and_si128(f1, c2); 
         r1 = _mm_xor_si128(r1, f1); 
         f1 = _mm_srli_epi32(r1, 18); 
@@ -854,6 +937,7 @@ inline uint32_t merssen_twister_rand_fast_partial_4_SSE4(mersenne_twister_state*
 
 inline uint32_t merssen_twister_rand_fast_partial_8_SSE4(mersenne_twister_state* state)
 {
+    //on 3 sse reg
     if (state->index == MERSENNE_TWISTER_SIZE)
     {
         __m128i f1,f2,r1,r2;
@@ -864,6 +948,8 @@ inline uint32_t merssen_twister_rand_fast_partial_8_SSE4(mersenne_twister_state*
         U32  pval, pval2, pvaln, ip1_l;
         pval = state->seed;
         
+        // --------- init ----------
+        //one group of 4
         r1 =  _mm_cvtsi32_si128(pval);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 1;
         r1 = _mm_insert_epi32_M(r1, pval, 1);
@@ -871,8 +957,9 @@ inline uint32_t merssen_twister_rand_fast_partial_8_SSE4(mersenne_twister_state*
         r1 = _mm_insert_epi32_M(r1, pval, 2);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 3;
         r1 = _mm_insert_epi32_M(r1, pval, 3);
-        pval = 0x6c078965 * (pval ^ pval >> 30) + 4; 
+        pval = 0x6c078965 * (pval ^ pval >> 30) + 4; //i+1 of the 4th element
 
+        //one group of 4
         r2 = _mm_cvtsi32_si128(pval);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 5;
         r2 = _mm_insert_epi32_M(r2, pval, 1);
@@ -880,8 +967,9 @@ inline uint32_t merssen_twister_rand_fast_partial_8_SSE4(mersenne_twister_state*
         r2 = _mm_insert_epi32_M(r2, pval, 2);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 7;
         r2 = _mm_insert_epi32_M(r2, pval, 3);
-        ip1_l = 0x6c078965 * (pval ^ pval >> 30) + 8; 
+        ip1_l = 0x6c078965 * (pval ^ pval >> 30) + 8; //i+1 of the 4th element
 
+        //jump to forward constant
         pval2 = 9;
         pval = ip1_l;
         while (pval2 <= MERSENNE_TWISTER_PERIOD)
@@ -889,6 +977,7 @@ inline uint32_t merssen_twister_rand_fast_partial_8_SSE4(mersenne_twister_state*
             pval = 0x6c078965 * (pval ^ pval >> 30) + pval2++;
         }
 
+        //one group of 4 future constants
         f1 = _mm_cvtsi32_si128(pval);        
         pval = 0x6c078965 * (pval ^ pval >> 30) + 398;
         f1 = _mm_insert_epi32_M(f1, pval, 1);
@@ -897,6 +986,7 @@ inline uint32_t merssen_twister_rand_fast_partial_8_SSE4(mersenne_twister_state*
         pval = 0x6c078965 * (pval ^ pval >> 30) + 400;
         f1 = _mm_insert_epi32_M(f1, pval, 3);
 
+        //one group of 4 fc
         pval = 0x6c078965 * (pval ^ pval >> 30) + 401;
         f2 = _mm_cvtsi32_si128(pval);
         pval = 0x6c078965 * (pval ^ pval >> 30) + 402;
@@ -907,6 +997,8 @@ inline uint32_t merssen_twister_rand_fast_partial_8_SSE4(mersenne_twister_state*
         f2 = _mm_insert_epi32_M(f2, pval, 3);
 
 
+        //---------- seed ----------
+        //seed
         RH_MT_ST(r1, f1, 0, 1);
         RH_MT_ST(r1, f1, 1, 2);
         RH_MT_ST(r1, f1, 2, 3);
@@ -914,9 +1006,13 @@ inline uint32_t merssen_twister_rand_fast_partial_8_SSE4(mersenne_twister_state*
         f1 = _mm_srli_epi32(r1, 11); 
         r1 = _mm_xor_si128(r1, f1); 
         f1 = _mm_slli_epi32(r1, 7);
+        //c = _mm_cvtsi32_si128(0x9d2c5680);
+        //c = _mm_shuffle_epi32(c, 0);
         f1 = _mm_and_si128(f1, c1); 
         r1 = _mm_xor_si128(r1, f1); 
         f1 = _mm_slli_epi32(r1, 15); 
+        //c = _mm_cvtsi32_si128(0xefc60000);
+        //c = _mm_shuffle_epi32(c, 0);
         f1 = _mm_and_si128(f1, c2); 
         r1 = _mm_xor_si128(r1, f1); 
         f1 = _mm_srli_epi32(r1, 18); 
@@ -936,9 +1032,13 @@ inline uint32_t merssen_twister_rand_fast_partial_8_SSE4(mersenne_twister_state*
         f1 = _mm_srli_epi32(r1, 11); 
         r1 = _mm_xor_si128(r1, f1); 
         f1 = _mm_slli_epi32(r1, 7);
+        //c = _mm_cvtsi32_si128(0x9d2c5680);
+        //c = _mm_shuffle_epi32(c, 0);
         f1 = _mm_and_si128(f1, c1); 
         r1 = _mm_xor_si128(r1, f1); 
         f1 = _mm_slli_epi32(r1, 15); 
+        //c = _mm_cvtsi32_si128(0xefc60000);
+        //c = _mm_shuffle_epi32(c, 0);
         f1 = _mm_and_si128(f1, c2); 
         r1 = _mm_xor_si128(r1, f1); 
         f1 = _mm_srli_epi32(r1, 18); 

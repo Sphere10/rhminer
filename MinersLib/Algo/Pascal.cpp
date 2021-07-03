@@ -1,6 +1,6 @@
 #include "precomp.h"
 #include "sph_sha2.h"
-#include "MinersLib/Pascal/PascalCommon.h"
+#include "MinersLib/RandomHash/Common.h"
 
 void PascalHashV3(void *state, const void *input)
 {

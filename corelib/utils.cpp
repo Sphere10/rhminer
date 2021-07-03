@@ -77,6 +77,15 @@ string TrimZeros(const string& str, bool tailing, bool heading)
     return rstring;
 }
 
+extern string MakeSpaces(U32 count, char character)
+{
+    string spaces;
+    spaces.resize(count);
+    memset(&spaces[0], character, count);
+    return spaces;
+}
+
+
 string TrimString(const string& str)
 {
     const char* head = str.c_str();
@@ -467,7 +476,7 @@ void CpuYield()
 #ifdef _WIN32_WINNT
     Yield();
 #else
-    #if defined(MACOS_X) || (defined(__APPLE__) & defined(__MACH__))
+    #if defined(IS_MAC_OS_X)
 		std::this_thread::yield();
     #else
     pthread_yield();

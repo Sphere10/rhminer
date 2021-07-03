@@ -33,13 +33,13 @@ public:
     virtual void ClearKernelOutputBuffer() { m_cudaMinerProxy->ClearKernelOutputBuffer();  }
     virtual PlatformType GetPlatformType() { return PlatformType_CUDA; }
 
-    virtual bool init(const PascalWorkSptr& work);
+    virtual bool init(const WorkPackageSptr& work);
     virtual void InitFromFarm(U32 relativeIndex);
 
 protected:
-    virtual PrepareWorkStatus PrepareWork(const PascalWorkSptr& workTempl, bool reuseCurrentWP = false);
+    virtual PrepareWorkStatus PrepareWork(const WorkPackageSptr& workTempl, bool reuseCurrentWP = false);
 
-    bool BuildKernels(const PascalWorkSptr& work) { return true; }
+    bool BuildKernels(const WorkPackageSptr& work) { return true; }
 
     virtual void QueueKernel()
     {

@@ -17,39 +17,51 @@
 #pragma once
 
 #include "corelib/basetypes.h"
-#include "MinersLib/Pascal/PascalCommon.h"
+#include "MinersLib/RandomHash/Common.h"
 
 #ifndef __CUDA_ARCH__
   #ifdef RANDOMHASH_CUDA
-    #include <emmintrin.h>
+    #ifndef RHMINER_NO_SIMD
+        #include <emmintrin.h>
+    #endif
   #else
-    #include <immintrin.h>
+    #ifndef RHMINER_NO_SIMD
+        #include <immintrin.h>
+    #endif
   #endif
 
   #ifndef _WIN32_WINNT
-    #include <x86intrin.h>
-    
+    #ifndef RHMINER_NO_SIMD
+        #include <x86intrin.h>
+    #endif
+
     #define _rotr8(x,n)	(((x) >> n) | ((x) << (8 - n)))
     #define _rotl8(x,n)	(((x) << n) | ((x) >> (8 - n)))
-
+ 
     #define _rotr64(x,n)	(((x) >> (n)) | ((x) << (64 - (n))))
     #define _rotl64(x,n)	(((x) << (n)) | ((x) >> (64 - (n))))
   #endif
 #endif
 
 #define RH_DISABLE_RH_ASSERTS
+//#define RH_ENABLE_OPTIM_STRIDE_ARRAY_MURMUR3
+//#define RH_ENABLE_OPTIM_EXPAND_ACCUM8
 
 #ifdef RHMINER_DEBUG
     #undef RH_DISABLE_RH_ASSERTS
+
+    //#pragma message ("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Enabled RHMINER_DEBUG_STRIDE_INTEGRITY_CHECK")
+    //#define RHMINER_DEBUG_STRIDE_INTEGRITY_CHECK
 #endif
 
 #if defined(RHMINER_ENABLE_SSE4)
     #if defined(RHMINER_NO_SSE4)
+        //unused yet
         static inline __m128i _mm_mullo_epi32_EMU(const __m128i &a, const __m128i &b)
         {
-            __m128i tmp1 = _mm_mul_epu32(a,b); 
-            __m128i tmp2 = _mm_mul_epu32( _mm_srli_si128(a,4), _mm_srli_si128(b,4)); 
-            return _mm_unpacklo_epi32(_mm_shuffle_epi32(tmp1, _MM_SHUFFLE (0,0,2,0)), _mm_shuffle_epi32(tmp2, _MM_SHUFFLE (0,0,2,0))); 
+            __m128i tmp1 = _mm_mul_epu32(a,b); /* mul 2,0*/
+            __m128i tmp2 = _mm_mul_epu32( _mm_srli_si128(a,4), _mm_srli_si128(b,4)); /* mul 3,1 */
+            return _mm_unpacklo_epi32(_mm_shuffle_epi32(tmp1, _MM_SHUFFLE (0,0,2,0)), _mm_shuffle_epi32(tmp2, _MM_SHUFFLE (0,0,2,0))); /* shuffle results to [63..0] and pack */
         }
         #define _mm_mullo_epi32_M _mm_mullo_epi32_EMU
     #else
@@ -58,12 +70,18 @@
 #endif
 
 
-#define RH_TOTAL_STRIDES_INSTANCES (RH2_StrideArrayCount+1)
 #define RH1_STRIDE_BANK_SIZE 5033984
+
 #define RH2_STRIDE_BANK_SIZE  (70*4096)
+//for RH2_STRIDE_PACKMODE
+//#define RH2_STRIDE_BANK_SIZE  (512*4096)
+                               
+
 #define RH_GET_MEMBER_POS(STRUCT, MEMBER)  (U32)((size_t)(void*)&(((STRUCT*)0)->MEMBER))
+
 #define copy128b(dst, src) { *reinterpret_cast<U64*>(dst) = *reinterpret_cast<U64*>(src); \
                             *(reinterpret_cast<U64*>(dst)+1) = *(reinterpret_cast<U64*>(src)+1);}
+
 
 #define copy4(dst, src) {(dst)[0] = (src)[0]; \
                          (dst)[1] = (src)[1]; \
@@ -107,6 +125,7 @@
 #define RH2_DISABLE_SHUFFLE_EPI8
 #endif
 
+#ifndef RHMINER_NO_SIMD
 
 //#define RH_SSE_CONST(val) _mm_shuffle_epi32(_mm_cvtsi32_si128(val), 0)
 #define RH_SSE_CONST(V) _mm_set1_epi32(V)
@@ -141,18 +160,20 @@ inline __m128i _mm_insert_epi32_(__m128i V, U32 V32 )
 #define TH_MM_STREAM_STORE128   _mm_storeu_si128
 #define RH_MM_BARRIER           void
 
-#endif
+#endif //#ifndef RHMINER_NO_SIMD
+#endif  //#ifndef __CUDA_ARCH__
 
 #ifdef RHMINER_PLATFORM_CPU
 
 #ifndef _WIN32_WINNT
-    #if defined(MACOS_X) || (defined(__APPLE__) & defined(__MACH__))
+    #if defined(IS_MAC_OS_X)
         #define _rotr(x,n)	    ((((x) >> (n)) | ((x) << (32 - (n)))))
         #define _rotl(x,n)	    ((((x) << (n)) | ((x) >> (32 - (n)))))
     #endif
+    //...
 #endif
 
-#endif 
+#endif //CPU
 
 
 #ifndef RHMINER_PLATFORM_GPU // CPU
@@ -163,20 +184,18 @@ inline __m128i _mm_insert_epi32_(__m128i V, U32 V32 )
     #define RH_DEVICE_BARRIER() 
     #define RH_CUDA_ERROR_CHECK() 
     
-    #define ROTR32(x,y) _rotr((x),(y))
+    #define ROTR32(x,y) _rotr(U32(x),(y))
     #define ROTL8(x,y)  _rotl8((x),(U8)((y) % 8))
     #define ROTR8(x,y)  _rotr8((x),(U8)((y) % 8))
-    #define ROTL32(x,y)	_rotl((x),(y))
+    #define ROTL32(x,y)	_rotl(U32(x),(y))
     #define ROTL64(x,y)	_rotl64((x),(y))
     #define ROTR64(x,y)	_rotr64((x),(y))
-    #define ROTL_epi32(m_tmp, m, count) {\
-            m_tmp = m; \
-            m = _mm_slli_epi32(m,count); \
-            m_tmp = _mm_srli_epi32(m_tmp,(32-count)); \
-            m = _mm_or_si128(m,m_tmp);}
-
-    //#define RH_PREFETCH_MEM(addr) _mm_prefetch((char*)addr,_MM_HINT_T0);
-	#define RH_PREFETCH_MEM(addr) _mm_prefetch((char*)addr,_MM_HINT_NTA); 
+    #ifndef RHMINER_NO_SIMD
+        //#define RH_PREFETCH_MEM(addr) _mm_prefetch((char*)addr,_MM_HINT_T0);
+	    #define RH_PREFETCH_MEM(addr) _mm_prefetch((char*)addr,_MM_HINT_NTA); 
+    #else
+        #define RH_PREFETCH_MEM(addr) 
+    #endif
 
 
     #define BIG_CONSTANT(x) (x)
@@ -475,5 +494,5 @@ uint32_t ReverseBytesUInt32(const uint32_t value)
   #ifdef RHMINER_DEBUG
     #define RH_DISABLE_RH_ASSERTS
   #endif
-  #include "MinersLib/Pascal/RandomHash_DEV_TESTING.h"
+  #include "MinersLib/RandomHash/RandomHash_DEV_TESTING.h"
 #endif

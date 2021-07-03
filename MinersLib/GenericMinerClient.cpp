@@ -17,7 +17,7 @@
 #include "precomp.h"
 #include "GenericMinerClient.h"
 #include "MinersLib/CLMinerBase.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "corelib/miniweb.h"
 
 #include "MinersLib/Farm.h"
@@ -27,8 +27,8 @@ RHMINER_COMMAND_LINE_DEFINE_GLOBAL_INT(g_DisplaySpeedTimeout, 10); //seconds
 
 extern bool g_appActive;
 
-GenericMinerClient::GenericMinerClient():
-    BaseMinerClient("Miner"),
+GenericMinerClient::GenericMinerClient(string coin):
+    BaseMinerClient("Miner", coin),
     m_farm()
 {
 }    
@@ -49,8 +49,9 @@ void GenericMinerClient::PushMiniWebData(SolutionStats& farmSol, WorkingProgress
         else
             threadCount = GpuManager::Gpus[mp.gpuGlobalIndex[i]].globalWorkSize;
 
-        jdata += FormatString("{\"name\":\"%s\", \"threads\":%u, \"speed\":%u, \"accepted\":%u, \"rejected\":%u , \"temp\":%u , \"fan\":%u }", 
+        jdata += FormatString("{\"name\":\"%s\", \"coin\":\"%s\", \"threads\":%u, \"speed\":%u, \"accepted\":%u, \"rejected\":%u , \"temp\":%u , \"fan\":%u }", 
             name.c_str(), 
+            m_miningCoin.c_str(),
             threadCount,
             mp.minersHasheRate[i],
             mp.acceptedShares[i],
@@ -95,7 +96,7 @@ void GenericMinerClient::PushMiniWebData(SolutionStats& farmSol, WorkingProgress
 
     string ethManData = "{\"result\": [";
     //Version
-    ethManData += FormatString("\"%s - PASC\", ", RH_PROJECT_VERSION);
+    ethManData += FormatString("\"%s - %s\", ", RH_PROJECT_VERSION, m_miningCoin);
     
     //Running time in minutes
     ethManData += FormatString("\"%u\", ", GlobalMiningPreset::I().GetUpTimeMS() / 1000 / 60);
@@ -134,7 +135,7 @@ void GenericMinerClient::doStratum()
         m_stratumClient->Submit(sol);
 		return false;
 	});
-    m_farm.onRequestNewWork([&](PascalWorkSptr wp, GenericCLMiner* miner)
+    m_farm.onRequestNewWork([&](WorkPackageSptr wp, GenericCLMiner* miner)
     {
         m_stratumClient->InitializeWP(wp); ///Will request new nonce !
     });
@@ -148,7 +149,6 @@ void GenericMinerClient::doStratum()
                 m_stratumClient->SetDevFeeCredentials(connectParam);
                 m_stratumClient->ReconnectToServer();
 
-                //start devfee time watchdog
                 if (!m_WatchdogDevFee)
                 {
                     m_WatchdogDevFee = new std::thread([&]()

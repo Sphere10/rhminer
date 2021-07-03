@@ -24,7 +24,7 @@
 
 #include "precomp.h"
 #include "MinersLib/Miner.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "MinersLib/CLMinerBase.h"
 #include "MinersLib/Global.h"
 
@@ -53,7 +53,7 @@ U64 Miner::GetHashRatePerSec()
     return rate;
 }
 
-void Miner::SetWork(PascalWorkSptr _work)
+void Miner::SetWork(WorkPackageSptr _work)
 {
     {
         Guard l(m_workMutex);

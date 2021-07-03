@@ -1,4 +1,6 @@
 #include "precomp.h"
+#ifndef RH_COMPILE_CPU_ONLY
+
 /*
 * Wrapper for AMD SysFS on linux, using adapted code from amdcovc by matszpk
 *
@@ -208,3 +210,4 @@ int wrap_amdsysfs_get_fanpcnt(wrap_amdsysfs_handle *sysfsh, int index, unsigned 
 	*fanpcnt = unsigned(double(pwm - pwmMin) / double(pwmMax - pwmMin) * 100.0);
 	return 0;
 }
+#endif

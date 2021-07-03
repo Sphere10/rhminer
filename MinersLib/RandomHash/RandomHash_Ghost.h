@@ -19,12 +19,15 @@
 const uint32_t Ghost_HashSize = (8*4);
 struct GostHashCtx
 {
-    U32 sum[8];
-    U32 hash[8];
-    U32 len[8];
-    unsigned char partial[32];
+    /*RH_ALIGN(128) */U32 sum[8];
+    /*RH_ALIGN(128) */U32 hash[8];
+    /*RH_ALIGN(128) */U32 len[8];
+    /*RH_ALIGN(128) */unsigned char partial[32];
     size_t partial_bytes;
 };
+
+ /* lookup tables : each of these has two rotated 4-bit S-Boxes */
+
 
 U32 gost_sbox_1[256] = { 
  466944, 
@@ -70,6 +73,8 @@ U32 gost_sbox_4[256] = {
  1912,  1832,  1864,  1792,  1872,  1904,  1848,  1840,  1856,  1808,  1888,  872,  856,  800,  776,  792,  888,  808,  840,  768,  848,  880,  824,  816,  832,  784,  864,  1512,  1496,  1440, 
  1416,  1432,  1528,  1448,  1480,  1408,  1488,  1520,  1464,  1456,  1472,  1424,  1504,  1128,  1112,  1056,  1032,  1048,  1144,  1064,  1096,  1024,  1104,  1136,  1080,  1072,  1088,  1040,  1120,  1640, 
  1624,  1568,  1544,  1560,  1656,  1576,  1608,  1536,  1616,  1648,  1592,  1584,  1600,  1552,  1632, };
+
+/* initialize the lookup tables */
 
 /*
  *  A macro that performs a full encryption round of GOST 28147-89.
@@ -397,5 +402,56 @@ void RandomHash_Ghost(RH_StridePtr roundInput, RH_StridePtr output)
     RH_STRIDE_SET_SIZE(output, Ghost_HashSize);
     memcpy(RH_STRIDE_GET_DATA8(output), ctx.hash, Ghost_HashSize);
 
-    
+    /*
+
+    //init
+    const uint32_t Whirlpool_BlockSize = 64;
+    const uint32_t Whirlpool_HashSize = 64;
+    RH_ALIGN(64) uint64_t state[8];
+    RH_memzero_64(state, sizeof(state));
+
+    //body
+    int32_t len = (int32_t)RH_STRIDE_GET_SIZE(roundInput);
+    uint32_t blockCount = len / Whirlpool_BlockSize;
+    uint64_t *dataPtr = RH_STRIDE_GET_DATA64(roundInput);
+    uint64_t bits = len * 8;
+    while (blockCount > 0)
+    {
+        WhirlPool_Transform(dataPtr, state);
+        len -= Whirlpool_BlockSize;
+        dataPtr += Whirlpool_BlockSize / 8;
+        blockCount--;
+    }
+
+    //finish
+    {
+        int32_t padindex; 
+        RH_ALIGN(64) uint8_t pad[96];
+
+		if (len > 31)
+			padindex = 120 - len;
+		else
+			padindex = 56 - len;
+
+        RH_memzero_of16(pad, sizeof(pad));
+
+        pad[0] = 0x80;
+        bits = ReverseBytesUInt64(bits);
+        ReadUInt64AsBytesLE(bits, pad+padindex);
+
+        padindex = padindex + 8;
+        memcpy(((uint8_t*)dataPtr) + len, pad, padindex);
+        RH_ASSERT(padindex <= sizeof(pad));
+        RH_ASSERT(((padindex + len) % Whirlpool_BlockSize) == 0);
+
+        WhirlPool_Transform(dataPtr, state);
+        padindex -= Whirlpool_BlockSize;
+        if (padindex > 0)
+            WhirlPool_Transform(dataPtr + (Whirlpool_BlockSize / 8), state);
+    }
+
+    dataPtr = (uint64_t*)RH_STRIDE_GET_DATA(output);
+    RH_STRIDE_SET_SIZE(output, Whirlpool_HashSize);
+    copy8_op(dataPtr, state, ReverseBytesUInt64);
+ **/
 }

@@ -1,0 +1,3 @@
+To install PascalCoin ScreenSaver simply right-click on file PascalCoinScreenSaver.scr and click "install" from the menu.
+Then you can configure it.
+For Laptop users it is STROGLY recommented to set only 1 thread in the scrensaver's config.

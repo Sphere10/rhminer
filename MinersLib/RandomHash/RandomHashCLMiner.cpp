@@ -26,7 +26,7 @@ RandomHashCLMiner::RandomHashCLMiner(FarmFace& _farm, unsigned globalWorkMult, u
 {
 }
 
-bool RandomHashCLMiner::init(const PascalWorkSptr& work)
+bool RandomHashCLMiner::init(const WorkPackageSptr& work)
 {
     AddPreBuildFunctor([&](string& code) 
     {
@@ -44,10 +44,10 @@ void RandomHashCLMiner::QueueKernel()
 /*
 SolutionSptr RandomHashCLMiner::MakeSubmitSolution(const std::vector<U64>& nonces, bool isFromCpuMiner)
 {
-    PascalSolution* sol = new PascalSolution();
+    WorkSolution* sol = new WorkSolution();
     sol->m_results = nonces;
     sol->m_gpuIndex = m_globalIndex;
-    sol->m_work = PascalWorkSptr(m_currentWp->Clone());
+    sol->m_work = WorkPackageSptr(m_currentWp->Clone());
     sol->m_isFromCpuMiner = isFromCpuMiner;
 
     return SolutionSptr(sol);
@@ -56,6 +56,7 @@ SolutionSptr RandomHashCLMiner::MakeSubmitSolution(const std::vector<U64>& nonce
 */
 bool RandomHashCLMiner::configureGPU()
 {
+    //target a minimum of I=10
     return GpuManager::SetupGPU();
 }
 

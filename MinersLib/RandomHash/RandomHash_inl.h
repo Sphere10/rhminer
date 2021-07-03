@@ -15,7 +15,7 @@
 /// @copyright Polyminer1
 
 #pragma once
-#include "MinersLib/Pascal/RandomHash_def.h"
+#include "MinersLib/RandomHash/RandomHash_def.h"
 #include "corelib/rh_endian.h"
 
 #ifdef RHMINER_PLATFORM_CPU
@@ -31,7 +31,7 @@ inline void RH_INPLACE_MEMCPY_128(U8* pDst, U8* pSrc, size_t byteCount)
 {
     RH_ASSERT(((size_t)pDst % 32) == 0);
     RH_ASSERT(((size_t)pSrc % 32) == 0);
-#ifndef RH2_FORCE_NO_INPLACE_MEMCPY_USE_MMX
+#ifndef RH2_AVOID_MMX_FOR_INPLACE_MEMCPY
     if (g_memoryBoostLevel == 1)
     {
         S32 n = RHMINER_CEIL(byteCount, sizeof(__m128i));
@@ -65,12 +65,36 @@ inline void RH_STRIDE_MEMCPY_ALIGNED_SIZE128(U8 *pDst, U8 *pSrc, size_t byteCoun
 
 
 
-#define RH_STRIDEARRAY_PUSHBACK(strideArrayVar, stride)                     \
-{                                                                           \
-    U32 _as = RH_STRIDEARRAY_GET_SIZE(strideArrayVar)++;                    \
-    RH_ASSERT(_as < RH_STRIDEARRAY_GET_MAXSIZE(strideArrayVar));            \
-    (strideArrayVar).strides[_as] = (stride);     \
-}
+#ifdef RH2_STRIDE_PACKMODE  
+
+    void inline RH_STRIDEARRAY_PUSHBACK(RH_StrideArrayStruct& strideArrayVar, RH_StridePtr stride)
+    {
+        U32 aidx = RH_STRIDEARRAY_GET_SIZE(strideArrayVar)++;
+        RH_ASSERT(aidx < RH_STRIDEARRAY_GET_MAXSIZE(strideArrayVar));
+        strideArrayVar.strides[aidx] = stride;
+
+        U32 ssize = RH_STRIDE_GET_SIZE(stride);
+        memcpy(&strideArrayVar.packedData[strideArrayVar.packedSize], RH_STRIDE_GET_DATA8(stride), ssize);        
+        strideArrayVar.packedSizes[aidx] = ssize;    
+        strideArrayVar.packedIdx[aidx] = strideArrayVar.packedSize;
+        strideArrayVar.packedSize += ssize;
+
+//TEMP TEMP TEMP 
+#ifdef _DEBUG
+    for(int i=0; i < RH_STRIDEARRAY_GET_SIZE(strideArrayVar); i++)
+        RH_ASSERT(strideArrayVar.packedSizes[i] != 0);
+    RH_ASSERT(ssize != 0);
+#endif
+
+    }
+#else
+    #define RH_STRIDEARRAY_PUSHBACK(strideArrayVar, stride)                     \
+    {                                                                           \
+        U32 _as = RH_STRIDEARRAY_GET_SIZE(strideArrayVar)++;                    \
+        RH_ASSERT(_as < RH_STRIDEARRAY_GET_MAXSIZE(strideArrayVar));            \
+        (strideArrayVar).strides[_as] = (stride);     \
+    }
+#endif
 
 
 inline void RH_STRIDEARRAY_PUSHBACK_MANY(RH_StrideArrayStruct& strideArrayVar, RH_StrideArrayStruct& strideArrayVarSrc)
@@ -78,6 +102,31 @@ inline void RH_STRIDEARRAY_PUSHBACK_MANY(RH_StrideArrayStruct& strideArrayVar, R
     U32 ssize = RH_STRIDEARRAY_GET_SIZE(strideArrayVarSrc);
     U32 dsize = RH_STRIDEARRAY_GET_SIZE(strideArrayVar);
 
+#ifdef RH2_STRIDE_PACKMODE
+
+    memcpy(&strideArrayVar.strides[dsize], &strideArrayVarSrc.strides[0], sizeof(strideArrayVarSrc.strides[0]) * ssize);
+    RH_STRIDEARRAY_GET_SIZE(strideArrayVar) += ssize;
+
+    //pack stuff
+    RH_ASSERT(strideArrayVar.packedSize + strideArrayVarSrc.packedSize < RH_StrideArrayStruct::MaxPackedData);
+    memcpy(&strideArrayVar.packedData[strideArrayVar.packedSize], strideArrayVarSrc.packedData, strideArrayVarSrc.packedSize);
+    memcpy(&strideArrayVar.packedSizes[dsize], &strideArrayVarSrc.packedSizes[0], sizeof(strideArrayVarSrc.packedSizes[0]) * ssize);
+    
+    U32* newIdx = &strideArrayVar.packedIdx[dsize];
+    memcpy(newIdx, &strideArrayVar.packedIdx[0], sizeof(strideArrayVarSrc.packedIdx[0]) * ssize);        
+    for(int i=0; i < ssize; i++)
+        newIdx[i] += strideArrayVar.packedSize;
+
+    strideArrayVar.packedSize += strideArrayVarSrc.packedSize;
+    
+//TEMP TEMP TEMP 
+#ifdef _DEBUG
+    for(int i=0; i < RH_STRIDEARRAY_GET_SIZE(strideArrayVar); i++)
+        RH_ASSERT(strideArrayVar.packedSizes[i] != 0);
+#endif
+
+
+#else
     RH_ASSERT(&strideArrayVar != &strideArrayVarSrc);
     RH_ASSERT(RH_STRIDEARRAY_GET_SIZE(strideArrayVar) + RH_STRIDEARRAY_GET_SIZE(strideArrayVarSrc) < RH_STRIDEARRAY_GET_MAXSIZE(strideArrayVar));
   #ifdef RH2_STRIDE_USE_MEMCPY
@@ -86,12 +135,17 @@ inline void RH_STRIDEARRAY_PUSHBACK_MANY(RH_StrideArrayStruct& strideArrayVar, R
   #else
     RH_STRIDEARRAY_FOR_EACH_BEGIN(strideArrayVarSrc)
     {                                                                           
-        RH_STRIDEARRAY_PUSHBACK(strideArrayVar, strideItrator);  
+        RH_STRIDEARRAY_PUSHBACK(strideArrayVar, strideItrator);  //TODO optimiz : one shot with memcpy
         RH_STRIDE_CHECK_INTEGRITY(strideItrator);
     }                                                                           
     RH_STRIDEARRAY_FOR_EACH_END(strideArrayVarSrc)
   #endif
+#endif
 } 
+
+//according to this, packing all stride would make Expand faster for BIG strides
+// Sizes tot = 47592 max  = 256    [cnt = 230] : 216, 216, 224, 240, 256, 144, 224, 256, 224, 256, 256, 168, 256, 208, 224, 256, 224, 160, 256, 216, 208, 212, 216, 216, 160, 212, 224, 220, 208, 208, 144, 208, 216, 224, 212, 224, 224, 176, 208, 212, 240, 240, 256, 212, 232, 212, 156, 80, 220, 216, 224, 208, 208, 208, 240, 216, 156, 208, 224, 256, 228, 228, 224, 220, 208, 176, 208, 208, 224, 208, 228, 208, 192, 208, 212, 152, 212, 216, 208, 240, 212, 212, 212, 144, 224, 208, 256, 220, 216, 212, 148, 220, 216, 216, 212, 144, 92, 212, 212, 208, 256, 240, 224, 144, 216, 256, 256, 156, 256, 216, 144, 256, 208, 216, 216, 148, 92, 240, 208, 152, 208, 208, 212, 160, 212, 208, 212, 256, 144, 208, 208, 216, 216, 160, 212, 224, 208, 152, 216, 208, 144, 84, 212, 212, 224, 216, 224, 224, 208, 208, 160, 208, 256, 212, 224, 216, 256, 144, 212, 212, 240, 212, 168, 216, 224, 220, 256, 220, 216, 256, 256, 152, 224, 216, 220, 224, 212, 216, 240, 176, 208, 216, 220, 212, 148, 80, 224, 	
+// Dist  avg = 79880 max  = 323584 [cnt = 230] : 323584, 16576, 297856, 280160, 44224, 10656, 16544, 15296, 312928, 3776, 301664, 7264, 6272, 43872, 22464, 2784, 23776, 39328, 25184, 16800, 288, 294368, 295456, 12544, 16960, 16352, 1792, 3904, 13088, 7872, 3584, 13248, 33600, 323456, 286016, 47968, 18016, 309600, 301536, 19520, 290880, 314656, 7456, 4128, 20352, 1568, 298432, 295200, 294624, 291584, 3424, 8512, 38112, 10208, 544, 310400, 301728, 20864, 13728, 7616, 21632, 317696, 291040, 13760, 275104, 313792, 17216, 1120, 3232, 14464, 16128, 1088, 16832, 28256, 8320, 19168, 512, 10880, 11360, 9504, 11072, 10720, 5984, 11360, 2848, 23904, 320, 39776, 15296, 1120, 10016, 13344, 19680, 9952, 2912, 29504, 10976, 1216, 8640, 4128, 
 
 void RH_STRIDEARRAY_COPY_ALL(RH_StrideArrayStruct& strideArrayVar, RH_StrideArrayStruct& strideArrayVarSrc)
 {
@@ -99,6 +153,28 @@ void RH_STRIDEARRAY_COPY_ALL(RH_StrideArrayStruct& strideArrayVar, RH_StrideArra
     RH_STRIDEARRAY_SET_SIZE(strideArrayVar, srcCnt);
     RH_ASSERT(&strideArrayVar != &strideArrayVarSrc);
 
+#ifdef RH2_STRIDE_PACKMODE
+
+    memcpy(&strideArrayVar.strides[0], &strideArrayVarSrc.strides[0], sizeof(strideArrayVarSrc.strides[0]) * srcCnt);
+
+    //pack stuff
+    U32 dstSize = RH_STRIDEARRAY_GET_SIZE(strideArrayVar);
+    memcpy(&strideArrayVar.packedData[0], strideArrayVarSrc.packedData, strideArrayVarSrc.packedSize);
+    memcpy(&strideArrayVar.packedSizes[0], &strideArrayVarSrc.packedSizes[0], sizeof(strideArrayVarSrc.packedSizes[0]) * srcCnt);
+    
+    U32* newIdx = &strideArrayVar.packedIdx[0];
+    memcpy(newIdx, &strideArrayVar.packedIdx[0], sizeof(strideArrayVarSrc.packedIdx[0]) * srcCnt);        
+
+    strideArrayVar.packedSize = strideArrayVarSrc.packedSize;
+
+//TEMP TEMP TEMP 
+#ifdef _DEBUG
+    for(int i=0; i < RH_STRIDEARRAY_GET_SIZE(strideArrayVar); i++)
+        RH_ASSERT(strideArrayVar.packedSizes[i] != 0);
+    RH_ASSERT(srcCnt != 0);
+#endif
+
+#else
   #ifdef RH2_STRIDE_USE_MEMCPY
     memcpy(&(strideArrayVar).strides[0], &(strideArrayVarSrc).strides[0], sizeof((strideArrayVarSrc).strides[0]) * srcCnt);
   #else
@@ -110,6 +186,7 @@ void RH_STRIDEARRAY_COPY_ALL(RH_StrideArrayStruct& strideArrayVar, RH_StrideArra
         i++;
     }
   #endif
+#endif
 }
 
 
@@ -143,6 +220,7 @@ void RH_STRIDEARRAY_COPY_ALL(RH_StrideArrayStruct& strideArrayVar, RH_StrideArra
     *((U64*)acc8_ptr) = acc8_buf;       \
 }
 
+//RH2: avg 64, MAX 128
 #ifdef RH2_ENABLE_TRANSFO0_MMX128
 inline void Transfo0_2(U8* nextChunk, U32 size, U8* source)
 {
@@ -206,7 +284,7 @@ inline void Transfo0_2(U8* nextChunk, U32 size, U8* source)
 
     U8* head = nextChunk;
     U8* end = head + size;
-    
+    //load work
     while(head < end)
     {
         uint32_t x = rndState;
@@ -359,10 +437,10 @@ void Transfo5_2(U8* nextChunk, U32 size, U8* outputPtr)
     size = 0;
     while(size < halfSize)
     {
-        
+        //first half
         nextChunk[size] = outputPtr[itt] ^ outputPtr[itt + 1];
         itt += 2;
-        
+        //second half
         nextChunk[size+halfSize] = outputPtr[size] ^ outputPtr[ritt];
         size++;
         ritt--;
@@ -460,7 +538,7 @@ void Transfo6_2(U8* nextChunk, U32 size, U8* source)
         nextChunk++;
         source++;
     }
-#endif 
+#endif //cudaarch
 }
 
 
@@ -553,4 +631,280 @@ void Transfo7_2(U8* nextChunk, U32 size, U8* source)
     }
 #endif 
 }
+
+//{{{ TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP
+#if defined(RHMINER_ENABLE_SSE4)
+
+//TODO: Perf test that 
+
+inline void Transfo0_64(U8* nextChunk, U32 size, U8* source)
+{
+    RH_ASSERT(size == 64);
+    U32 x = (*(U32*)(source+size-4));
+
+    if (!x)
+        x = 1;
+
+    __m128i r0,r1,r2,r3;
+    U32 tval;
+    #define RH_TR0_RND_4X_64()                             \
+    {                                                   \
+        x ^= x << 13;                                   \
+        x ^= x >> 17;                                   \
+        x ^= x << 5;                                    \
+        tval = source[x % size];                        \
+        tval <<= 8;                                     \
+        x ^= x << 13;                                   \
+        x ^= x >> 17;                                   \
+        x ^= x << 5;                                    \
+        tval |= source[x % size];                       \
+        tval <<= 8;                                     \
+        x ^= x << 13;                                   \
+        x ^= x >> 17;                                   \
+        x ^= x << 5;                                    \
+        tval |= source[x % size];                       \
+        tval <<= 8;                                     \
+        x ^= x << 13;                                   \
+        x ^= x >> 17;                                   \
+        x ^= x << 5;                                    \
+        tval |= source[x % size];                       \
+        tval = RH_swap_u32(tval); \
+    }
+    
+
+    #define RH_TR0_PACKING_16X(R128) \
+        RH_TR0_RND_4X_64(); \
+        R128 = _mm_cvtsi32_si128(tval); \
+        RH_TR0_RND_4X_64(); \
+        R128 = _mm_insert_epi32_M(R128, tval, 1); \
+        RH_TR0_RND_4X_64(); \
+        R128 = _mm_insert_epi32_M(R128, tval, 2); \
+        RH_TR0_RND_4X_64(); \
+        R128 = _mm_insert_epi32_M(R128, tval, 3); \
+
+
+    RH_TR0_PACKING_16X(r0);
+    RH_TR0_PACKING_16X(r1);
+    RH_TR0_PACKING_16X(r2);
+    RH_TR0_PACKING_16X(r3);
+
+    RH_MM_STORE128(((__m128i*)nextChunk)+0, r0);
+    RH_MM_STORE128(((__m128i*)nextChunk)+1, r1);
+    RH_MM_STORE128(((__m128i*)nextChunk)+2, r2);
+    RH_MM_STORE128(((__m128i*)nextChunk)+3, r3);
+
+    //__debugbreak();
+}
+
+
+
+void Transfo1_64(U8* nextChunk, U32 size, U8* outputPtr)
+{
+    RH_ASSERT(size == 64);
+
+    __m128i r0,r1,r2,r3;
+
+    r0 = RH_MM_LOAD128(((__m128i *)(outputPtr)) + 0 );
+    r1 = RH_MM_LOAD128(((__m128i *)(outputPtr)) + 1 );
+    r2 = RH_MM_LOAD128(((__m128i *)(outputPtr)) + 2 ); //half
+    r3 = RH_MM_LOAD128(((__m128i *)(outputPtr)) + 3 );
+    __m128i* dst = (__m128i*)nextChunk;
+    RH_MM_STORE128(dst++, r2);
+    RH_MM_STORE128(dst++, r3);
+    RH_MM_STORE128(dst++, r0);
+    RH_MM_STORE128(dst++, r1);
+}
+
+
+void Transfo2_64(U8* nextChunk, U32 size, U8* outputPtr)
+{
+    __m128i r0,r1,r2,r3,mask;
+     mask = _mm_set_epi64x(0x0001020304050607ULL, 0x08090a0b0c0d0e0fULL);
+    r0 = RH_MM_LOAD128 (((__m128i *)(outputPtr)) + 0 );
+    r1 = RH_MM_LOAD128 (((__m128i *)(outputPtr)) + 1 );
+    r2 = RH_MM_LOAD128 (((__m128i *)(outputPtr)) + 2 ); //half
+    r3 = RH_MM_LOAD128 (((__m128i *)(outputPtr)) + 3);
+    r0 = _mm_shuffle_epi8(r0, mask);
+    r1 = _mm_shuffle_epi8(r1, mask);
+    r2 = _mm_shuffle_epi8(r2, mask);
+    r3 = _mm_shuffle_epi8(r3, mask);
+
+    __m128i* dst = (__m128i*)nextChunk;
+    RH_MM_STORE128(dst++, r3);
+    RH_MM_STORE128(dst++, r2);
+    RH_MM_STORE128(dst++, r1);
+    RH_MM_STORE128(dst++, r0);
+    
+}
+
+#define _mm_extract_epi64_M _mm_extract_epi64 
+
+#define RH_TRX34_MERGE(reg0, reg2, i0, i1)           \
+        {a0 = _mm_extract_epi32_M(reg0, i0);         \
+        b0 = _mm_extract_epi32_M(reg2, i0);          \
+        tmp = _mm_set1_epi32(a0);                    \
+        tmp = _mm_insert_epi32_M(tmp, b0, 1);          \
+        tmp = _mm_shuffle_epi8(tmp, mask);           \
+        t0 = _mm_extract_epi64_M(tmp, 1);            \
+                                                     \
+        a0 = _mm_extract_epi32_M(reg0, i1);          \
+        b0 = _mm_extract_epi32_M(reg2, i1);          \
+        tmp = _mm_set1_epi32(a0);                    \
+        tmp = _mm_insert_epi32_M(tmp, b0, 1);          \
+        tmp = _mm_shuffle_epi8(tmp, mask);           \
+        tmp = _mm_insert_epi64(tmp, t0, 0);          \
+        RH_MM_STORE128(dst++, tmp);}                 \
+
+
+
+void Transfo3_64(U8* nextChunk, U32 size, U8* outputPtr)
+{
+    RH_ASSERT((size % 2) == 0);
+
+    //__debugbreak();
+    U32 a0, b0;
+    U64 t0;
+    __m128i r0,r1,r2,r3,tmp, mask;
+    mask = _mm_set_epi8(7,3,6,2,5,1,4,0, 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff);
+    r0 = RH_MM_LOAD128 (((__m128i *)(outputPtr)) + 0 );
+    r1 = RH_MM_LOAD128 (((__m128i *)(outputPtr)) + 1 );
+    r2 = RH_MM_LOAD128 (((__m128i *)(outputPtr)) + 2 ); //half
+    r3 = RH_MM_LOAD128 (((__m128i *)(outputPtr)) + 3);
+    __m128i* dst = (__m128i*)nextChunk;
+
+    RH_TRX34_MERGE(r0, r2, 0, 1);
+    RH_TRX34_MERGE(r0, r2, 2, 3);
+    RH_TRX34_MERGE(r1, r3, 0, 1);
+    RH_TRX34_MERGE(r1, r3, 2, 3);
+
+    //__debugbreak();
+}
+
+
+#define _mm_extract_epi64_M _mm_extract_epi64 
+
+#define RH_TRX34_MERGE(reg0, reg2, i0, i1)           \
+        {a0 = _mm_extract_epi32_M(reg0, i0);         \
+        b0 = _mm_extract_epi32_M(reg2, i0);          \
+        tmp = _mm_set1_epi32(a0);                    \
+        tmp = _mm_insert_epi32_M(tmp, b0, 1);          \
+        tmp = _mm_shuffle_epi8(tmp, mask);           \
+        t0 = _mm_extract_epi64_M(tmp, 1);            \
+                                                     \
+        a0 = _mm_extract_epi32_M(reg0, i1);          \
+        b0 = _mm_extract_epi32_M(reg2, i1);          \
+        tmp = _mm_set1_epi32(a0);                    \
+        tmp = _mm_insert_epi32_M(tmp, b0, 1);          \
+        tmp = _mm_shuffle_epi8(tmp, mask);           \
+        tmp = _mm_insert_epi64(tmp, t0, 0);          \
+        RH_MM_STORE128(dst++, tmp);}                 \
+
+
+#define RH_TRX67_4BYTES(R128, N, _ROT)             \
+    val32 = _mm_extract_epi32_M(R128, N);    \
+    res = 0;                                 \
+    b = (U8)(val32);                         \
+    b = _ROT((U8)b, size);                  \
+    size--;                                  \
+    val32 >>= 8;                             \
+    b <<= (8*0);                             \
+    res |= b;                                \
+    b = (U8)(val32);                         \
+    b = _ROT((U8)b, size);                  \
+    size--;                                  \
+    val32 >>= 8;                             \
+    b <<= (8*1);                             \
+    res |= b;                                \
+    b = (U8)(val32);                         \
+    b = _ROT((U8)b, size);                  \
+    size--;                                  \
+    val32 >>= 8;                             \
+    b <<= (8*2);                             \
+    res |= b;                                \
+    b = (U8)(val32);                         \
+    b = _ROT((U8)b, size);                  \
+    size--;                                  \
+    val32 >>= 8;                             \
+    b <<= (8*3);                             \
+    res |= b;                                \
+    R128 = _mm_insert_epi32_M(R128, res, N); \
+
+
+void Transfo6_64(U8* nextChunk, U32 size, U8* source)
+{
+    //__debugbreak();
+    __m128i r0,r1,r2,r3;
+    r0 = RH_MM_LOAD128 (((__m128i *)(source)) + 0 );
+    r1 = RH_MM_LOAD128 (((__m128i *)(source)) + 1 );
+    r2 = RH_MM_LOAD128 (((__m128i *)(source)) + 2 ); //half
+    r3 = RH_MM_LOAD128 (((__m128i *)(source)) + 3 );
+    
+    U32 val32, res;
+    U32 b;    
+
+    RH_TRX67_4BYTES(r0, 0, ROTL8);
+    RH_TRX67_4BYTES(r0, 1, ROTL8);
+    RH_TRX67_4BYTES(r0, 2, ROTL8);
+    RH_TRX67_4BYTES(r0, 3, ROTL8);
+    RH_TRX67_4BYTES(r1, 0, ROTL8);
+    RH_TRX67_4BYTES(r1, 1, ROTL8);
+    RH_TRX67_4BYTES(r1, 2, ROTL8);
+    RH_TRX67_4BYTES(r1, 3, ROTL8);
+    RH_TRX67_4BYTES(r2, 0, ROTL8);
+    RH_TRX67_4BYTES(r2, 1, ROTL8);
+    RH_TRX67_4BYTES(r2, 2, ROTL8);
+    RH_TRX67_4BYTES(r2, 3, ROTL8);
+    RH_TRX67_4BYTES(r3, 0, ROTL8);
+    RH_TRX67_4BYTES(r3, 1, ROTL8);
+    RH_TRX67_4BYTES(r3, 2, ROTL8);
+    RH_TRX67_4BYTES(r3, 3, ROTL8);
+
+    __m128i* dst = (__m128i*)nextChunk;
+    RH_MM_STORE128(dst++, r0);
+    RH_MM_STORE128(dst++, r1);
+    RH_MM_STORE128(dst++, r2);
+    RH_MM_STORE128(dst++, r3);
+     //__debugbreak();
+
+}
+
+void Transfo7_64(U8* nextChunk, U32 size, U8* source)
+{    
+    __m128i r0,r1,r2,r3;
+    r0 = RH_MM_LOAD128 (((__m128i *)(source)) + 0 );
+    r1 = RH_MM_LOAD128 (((__m128i *)(source)) + 1 );
+    r2 = RH_MM_LOAD128 (((__m128i *)(source)) + 2 ); //half
+    r3 = RH_MM_LOAD128 (((__m128i *)(source)) + 3 );
+    
+    U32 val32, res;
+    U32 b;
+
+
+    RH_TRX67_4BYTES(r0, 0, ROTR8);
+    RH_TRX67_4BYTES(r0, 1, ROTR8);
+    RH_TRX67_4BYTES(r0, 2, ROTR8);
+    RH_TRX67_4BYTES(r0, 3, ROTR8);
+    RH_TRX67_4BYTES(r1, 0, ROTR8);
+    RH_TRX67_4BYTES(r1, 1, ROTR8);
+    RH_TRX67_4BYTES(r1, 2, ROTR8);
+    RH_TRX67_4BYTES(r1, 3, ROTR8);
+    RH_TRX67_4BYTES(r2, 0, ROTR8);
+    RH_TRX67_4BYTES(r2, 1, ROTR8);
+    RH_TRX67_4BYTES(r2, 2, ROTR8);
+    RH_TRX67_4BYTES(r2, 3, ROTR8);
+    RH_TRX67_4BYTES(r3, 0, ROTR8);
+    RH_TRX67_4BYTES(r3, 1, ROTR8);
+    RH_TRX67_4BYTES(r3, 2, ROTR8);
+    RH_TRX67_4BYTES(r3, 3, ROTR8);
+
+    __m128i* dst = (__m128i*)nextChunk;
+    RH_MM_STORE128(dst++, r0);
+    RH_MM_STORE128(dst++, r1);
+    RH_MM_STORE128(dst++, r2);
+    RH_MM_STORE128(dst++, r3);
+
+}
+#endif //sse4
+//}}} TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP
+
 

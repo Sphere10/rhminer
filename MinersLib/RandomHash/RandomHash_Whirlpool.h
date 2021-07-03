@@ -325,7 +325,7 @@ inline static uint64_t packIntoUInt64(const uint32_t b7, const uint32_t b6, cons
 
 inline static uint32_t maskWithReductionPolynomial(const uint32_t input)
 {
-	register uint32_t result = input;
+	uint32_t result = input;
 
 	if (result >= 0x100)
 		result = result ^ 0x011D;
@@ -335,7 +335,7 @@ inline static uint32_t maskWithReductionPolynomial(const uint32_t input)
 
 void WhirlPool_Transform(uint64_t* inData, uint64_t* hash)
 {
-    RH_ALIGN(64) uint64_t data[8]; 
+    RH_ALIGN(64) uint64_t data[8]; //BE
     RH_ALIGN(64) uint64_t k[8];
     RH_ALIGN(64) uint64_t m[8];
     RH_ALIGN(64) uint64_t temp[8];
@@ -351,7 +351,7 @@ void WhirlPool_Transform(uint64_t* inData, uint64_t* hash)
 		temp[i] = data[i] ^ k[i];
 	}
 		
-	for (register uint32_t round = 1; round < 10 + 1; round++)
+	for (uint32_t round = 1; round < 10 + 1; round++)
 	{
 		for (uint32_t i = 0; i < 8; i++)
 		{
@@ -398,11 +398,14 @@ void WhirlPool_Transform(uint64_t* inData, uint64_t* hash)
 
 void RandomHash_WhirlPool(RH_StridePtr roundInput, RH_StridePtr output)
 {
+
+    //init
     const uint32_t Whirlpool_BlockSize = 64;
     const uint32_t Whirlpool_HashSize = 64;
     RH_ALIGN(64) uint64_t state[8];
     RH_memzero_64(state, sizeof(state));
 
+    //body
     int32_t len = (int32_t)RH_STRIDE_GET_SIZE(roundInput);
     uint32_t blockCount = len / Whirlpool_BlockSize;
     uint64_t *dataPtr = RH_STRIDE_GET_DATA64(roundInput);
@@ -415,6 +418,7 @@ void RandomHash_WhirlPool(RH_StridePtr roundInput, RH_StridePtr output)
         blockCount--;
     }
 
+    //finish
     {
         int32_t padindex; 
         RH_ALIGN(64) uint8_t pad[96];

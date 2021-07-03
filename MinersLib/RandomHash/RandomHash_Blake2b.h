@@ -27,8 +27,8 @@
  * online backup system.
  */
 #include "RandomHash_core.h"
-#include "MinersLib/Algo/blake2b.h"                   
-#include "MinersLib/Algo/blake2s.h"                   
+#include "MinersLib/Algo/blake2b.h"                   //SIA
+#include "MinersLib/Algo/blake2s.h"                   //NOTE: Reference impl                   //NevaCoin, Netko Coin, Verge,
 
 // state context
 ALIGN(64) typedef struct {
@@ -137,4 +137,60 @@ void RandomHash_blake2b(RH_StridePtr roundInput, RH_StridePtr output, U32 bitSiz
     ctx.finalize(RH_STRIDE_GET_DATA(output));
     RH_STRIDE_SET_SIZE(output, outlen);
 
+    /*
+    WRONG RESULTS !!!!!
+    //sph_blake2b_init()
+	size_t i;
+    RH_ALIGN(64) sph_blake2b_ctx ctx;
+    RH_STRIDE_SET_SIZE(output, outlen);
+    
+    // state, "param block"		
+    ctx.h[0] = blake2b_iv[0];
+    ctx.h[0] ^= 0x01010000 ^ (0 << 8) ^ outlen;
+    ctx.h[1] = blake2b_iv[1];
+    ctx.h[2] = blake2b_iv[2];
+    ctx.h[3] = blake2b_iv[3];
+    ctx.h[4] = blake2b_iv[4];
+    ctx.h[5] = blake2b_iv[5];
+    ctx.h[6] = blake2b_iv[6];
+    ctx.h[7] = blake2b_iv[7];
+
+	ctx.t[0] = 0;                      // input count low word
+	ctx.t[1] = 0;                      // input count high word
+	ctx.c = 0;                         // pointer within buffer
+	ctx.outlen = outlen;
+
+    //TODO: optimiz
+	for (i = 0; i < 128; i++)      // zero input block
+		ctx.b[i] = 0;
+
+    U8* in = RH_STRIDE_GET_DATA(roundInput);
+	for (i = 0; i < RH_STRIDE_GET_SIZE(roundInput); i++) {
+		if (ctx.c == 128) {            // buffer full ?
+			ctx.t[0] += ctx.c;        // add counters
+			if (ctx.t[0] < ctx.c)     // carry overflow ?
+				ctx.t[1]++;            // high word
+			blake2b_compress(&ctx, 0);   // compress (not last)
+			ctx.c = 0;                 // counter to zero
+		}
+        
+        //TODO: optimiz
+		ctx.b[ctx.c++] = ((const uint8_t *) in)[i];
+	}
+
+	ctx.t[0] += ctx.c;                // mark last block offset
+	if (ctx.t[0] < ctx.c)             // carry overflow
+		ctx.t[1]++;                    // high word
+
+	while (ctx.c < 128)                // fill up with zeros
+		ctx.b[ctx.c++] = 0;
+	blake2b_compress(&ctx, 1);           // final block flag = 1
+
+	// little endian convert and store
+    U8* out = RH_STRIDE_GET_DATA(output);
+	for (i = 0; i < ctx.outlen; i++) {
+		((uint8_t *) out)[i] =
+			(ctx.h[i >> 3] >> (8 * (i & 7))) & 0xFF;
+	}
+    */
 }

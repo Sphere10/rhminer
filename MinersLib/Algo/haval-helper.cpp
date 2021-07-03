@@ -37,7 +37,7 @@
 #undef SPH_XCAT_
 #define SPH_XCAT_(a, b)   a ## b
 
-static void
+void
 #ifdef SPH_UPTR
 SPH_XCAT(SPH_XCAT(haval, PASSES), _short)
 #else

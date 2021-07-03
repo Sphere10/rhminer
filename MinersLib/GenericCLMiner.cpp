@@ -17,7 +17,7 @@
 #include "precomp.h"
 #include "GenericCLMiner.h"
 #include "MinersLib/Global.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 
 U64 c_zero = 0;
 
@@ -39,13 +39,12 @@ bool GenericCLMiner::WorkLoopStep()
     m_workReadyEvent.WaitUntilDone();
     RHMINER_RETURN_ON_EXIT_FLAG_EX(true); 
 
-    PascalWorkSptr workTemplate = GetWork();
+    WorkPackageSptr workTemplate = GetWork();
     
     //when kill() is called, we set the event but not the work, just exit then.
     if (!workTemplate.get())
         return false;
 
-    //handle DevFee
     m_farm.ReconnectToServer(0xFFFFFFFF); 
 
     if (!m_gpuInfoCache->enabled)
@@ -122,7 +121,7 @@ bool GenericCLMiner::WorkLoopStep()
 }
 
 
-bool GenericCLMiner::init(const PascalWorkSptr& work)
+bool GenericCLMiner::init(const WorkPackageSptr& work)
 {
     AddPreBuildFunctor([&](string& code) 
     {
@@ -215,7 +214,7 @@ bool GenericCLMiner::IsWorkStalled()
     return false;
 }
 
-PrepareWorkStatus GenericCLMiner::PrepareWork(const PascalWorkSptr& newWorkTempl, bool reuseCurrentWP)
+PrepareWorkStatus GenericCLMiner::PrepareWork(const WorkPackageSptr& newWorkTempl, bool reuseCurrentWP)
 {
     U32 isWorkpackageDirty = AtomicSet(m_workpackageDirty, 0);
 
@@ -225,7 +224,7 @@ PrepareWorkStatus GenericCLMiner::PrepareWork(const PascalWorkSptr& newWorkTempl
         //clone the global work package
         if (!reuseCurrentWP)
         {
-            m_currentWp = PascalWorkSptr(newWorkTempl->Clone());
+            m_currentWp = WorkPackageSptr(newWorkTempl->Clone());
             m_currentWp->m_localyGenerated = true;
         }
 
@@ -341,17 +340,17 @@ KernelCodeAndFuctions GenericCLMiner::GetKernelsCodeAndFunctions()
 
 SolutionSptr GenericCLMiner::MakeSubmitSolution(const std::vector<U64>& nonces, U64 nonce2, bool isFromCpuMiner)
 {
-    PascalSolution* sol = new PascalSolution();
+    WorkSolution* sol = new WorkSolution();
     sol->m_results = nonces;
     sol->m_gpuIndex = m_globalIndex;
-    sol->m_work = PascalWorkSptr(m_currentWp->Clone());
+    sol->m_work = WorkPackageSptr(m_currentWp->Clone());
     sol->m_isFromCpuMiner = isFromCpuMiner;
 
 #ifdef RH_RANDOMIZE_NONCE2
     if (!sol->m_work->m_isSolo)
     {
         sol->m_work->m_nonce2 = (U32)nonce2;
-        sol->m_work->m_nonce2_64 = PascalWorkPackage::ComputeNonce2((U32)nonce2);
+        sol->m_work->m_nonce2_64 = sol->m_work->ComputeNonce2((U32)nonce2);
     }
 #endif
 

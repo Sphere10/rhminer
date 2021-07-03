@@ -17,7 +17,7 @@
 
 #include "corelib/Log.h"
 #include "corelib/Worker.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 
 using namespace std;
 

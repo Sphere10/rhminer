@@ -25,14 +25,19 @@
 #elif defined(_WIN32)
     #define RH_ALIGN(n) __declspec(align(n))
 #elif defined(__GNUC__)
-    #define RH_ALIGN(n) __attribute__((aligned(n)))
+    #define RH_ALIGN(n) __attribute__((aligned(n))) 
 #else
     #error !! UNSUPPORTED COMPILER !!
 #endif
 
 #define RH_IS_ALIGNED_32(p) (0 == (3 & ((const char*)(p) - (const char*)0)))
 #define RH_IS_ALIGNED_64(p) (0 == (7 & ((const char*)(p) - (const char*)0)))
-
+#if defined(MACOS_X) || (defined(__APPLE__) && defined(__MACH__))
+    #define IS_MAC_OS_X
+    #if defined(__arm64__) || defined(__aarch64__)
+        #define IS_MAC_MX
+    #endif
+#endif
 #if defined(__CUDA_ARCH__)
     #define RHMINER_PLATFORM_CUDA
     #define RHMINER_PLATFORM_GPU
@@ -43,7 +48,7 @@
     #define RHMINER_PLATFORM_GPU
     #define RHMINER_PLATFORM_GPU_CODE(...) __VA_ARGS__
     #define RHMINER_PLATFORM_CPU_CODE(...)
-#elif (defined(__unix__) || defined(__unix)) || defined(_WIN32) || defined __x86_64 || defined _M_X64 || defined __i386__ || defined _M_IX86
+#elif (defined(__unix__) || defined(__unix)) || defined(IS_MAC_OS_X) || defined(_WIN32) || defined __x86_64 || defined _M_X64 || defined __i386__ || defined _M_IX86
     #define RHMINER_PLATFORM_CPU
     #define RHMINER_PLATFORM_GPU_CODE(...)
     #define RHMINER_PLATFORM_CPU_CODE(...) __VA_ARGS__
@@ -96,7 +101,30 @@
 
 
 #if !defined(RHMINER_NO_SSE4) || defined(RHMINER_COND_SSE4)
+    //{{{
+    //#pragma message (">>>>Disabled SSe4 cuz overall it's faster without !!!")
+    //}}}
     #define RHMINER_ENABLE_SSE4
+#endif
+
+//TEMP TEMP TEMP TEMP TEMP TEMP TEMP
+//#define RHMINER_NO_SIMD
+//TEMP TEMP TEMP TEMP TEMP TEMP TEMP
+
+#ifdef RHMINER_NO_SIMD
+    #undef RHMINER_NO_SSE4
+    #define RHMINER_NO_SSE4
+    #undef RHMINER_COND_SSE4
+    #undef RHMINER_ENABLE_SSE4
+    //force compil fail if those showup, PUT THAT IN precomp.h
+    //#define __m128i __bad_type__
+    //#define _mm_cvtsi32_si128 __bad_func__
+    //#define _mm_shuffle_epi32 __bad_func__
+    //#define _mm_add_epi32 __bad_func__
+    //#define _mm_set1_epi32 __bad_func__
+    //#define _mm_loadu_si128 __bad_func__
+    //#define _mm_load_si128 __bad_func__
+    //#define _mm_storeu_si128 __bad_func__        
 #endif
 
 #if defined(_DEBUG)
@@ -168,9 +196,7 @@ extern void PrintOut(const char *szFormat, ...);
     }
 #endif
 
-
-
-
+// cpu base types
 #if !defined(RHMINER_PLATFORM_GPU) && !defined(RANDOMHASH_CUDA)
     typedef uint8_t byte;
     #include <vector>
@@ -216,3 +242,12 @@ extern void PrintOut(const char *szFormat, ...);
     const F64 F64_Max = 1.7976931348623158E+308;
 
 #endif //RHMINER_BASE_TYPES_H
+
+//Suported coins
+#define RH_COIN_NAME_VNET   "VNET"
+#define RH_COIN_ID_VNET     1
+#define RH_COIN_NAME_PASC   "PASC"
+#define RH_COIN_ID_PASC     2
+
+
+

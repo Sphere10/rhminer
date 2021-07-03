@@ -177,7 +177,7 @@ void CmdLineManager::LoadFromXml(const char* configFile)
         if (!f)
         {
             *basePath = 0;
-#if defined(MACOS_X) || (defined(__APPLE__) & defined(__MACH__))
+#if defined(IS_MAC_OS_X)
             uint32_t size = sizeof(basePath);
             _NSGetExecutablePath(basePath, &size);
 #elif defined(_WIN32_WINNT)

@@ -1,4 +1,4 @@
-# Copyright 2010 Baptiste Lepilleur
+# Copyright 2010 Baptiste Lepilleur and The JsonCpp Authors
 # Distributed under MIT license, or public domain if desired and
 # recognized in your jurisdiction.
 # See file LICENSE for detail or copy at http://jsoncpp.sourceforge.net/LICENSE
@@ -32,8 +32,8 @@ def fix_source_eol(path, is_dry_run = True, verbose = True, eol = '\n'):
         if verbose:
             print(is_dry_run and ' NEED FIX' or ' FIXED')
     return True
-##    
-##    
+##
+##
 ##
 ##def _do_fix(is_dry_run = True):
 ##    from waftools import antglob

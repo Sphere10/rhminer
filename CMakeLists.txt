@@ -1,24 +1,49 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0)
 
 option(RH_DEBUG_TARGET "Compile in Debug" OFF)
-option(RH_CPU_ONLY "Compile only cpu code" OFF)
+option(RH_CPU_ONLY "Compile only cpu code" ON)
 option(RH_ARCH "Architecture name" Maxwell)
 option(RH_NO_SSE4 "Disable sse4 optimizations" OFF)
+option(RH_NO_SIMD "Disable entire simd set" OFF)
+
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+    add_definitions(-DRH_CPU_ONLY)
+else("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+    set(RH_DEBUG_TARGET ON)
+endif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+
 
 project(rhminer)
 set(RH_ARCH CPU)
 
+#Mac M1 hack
+set(RH_NO_SIMD ON)
+
 set(CMAKE_CXX_STANDARD 11)
+
+if(RH_NO_SIMD)
+    message("No SIMD, probably using Neon")
+    add_definitions(-DRHMINER_NO_SIMD)
+    set(RH_NO_SSE4 ON)
+endif(RH_NO_SIMD)
+unset(RH_NO_SIMD CACHE) 
 
 if(RH_NO_SSE4)
 	message(STATUS "Disabling SSe4 intrinsics")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -mssse3 ")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
+    if(RH_NO_SIMD EQUAL OFF)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mssse3")
+    endif(RH_NO_SIMD EQUAL OFF)
 	set(RH_ARCH CPU_OLDGEN)
 	add_definitions(-DRHMINER_NO_SSE4)
-else()
+else(RH_NO_SSE4)
 	message(STATUS "ENABLING SSe4 intrinsics")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -msse4.1")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
+    if(RH_NO_SIMD EQUAL OFF)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.1")
+    endif(RH_NO_SIMD EQUAL OFF)
 endif(RH_NO_SSE4)
+unset(RH_NO_SSE4 CACHE) 
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMake")
 
@@ -43,7 +68,7 @@ else(RH_CPU_ONLY)
 endif(RH_CPU_ONLY)
 
 add_definitions(-DRH_ARCH=${RH_ARCH})
-
+add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
 if(RH_DEBUG_TARGET)
 	message(STATUS "Building ${PROJECT_NAME} in DEBUG")
@@ -98,25 +123,25 @@ set(HEADERS
     MinersLib/Algo/sph_sha1.h
     MinersLib/Algo/sph_sha2.h  
     MinersLib/Algo/sph_types.h
-    MinersLib/Pascal/PascalCommon.h
-    MinersLib/Pascal/RandomHash.h
-    MinersLib/Pascal/RandomHashCLMiner.h
-    MinersLib/Pascal/RandomHashCPUMiner.h
-    MinersLib/Pascal/RandomHashHostCudaMiner.h
-    MinersLib/Pascal/RandomHash_core.h
-    MinersLib/Pascal/RandomHash_def.h
-    MinersLib/Pascal/RandomHash_inl.h
-    MinersLib/Pascal/RandomHash_mersenne_twister.h
-    MinersLib/Pascal/RandomHash_MurMur3_32.h
+    MinersLib/RandomHash/PascalCommon.h
+    MinersLib/RandomHash/RandomHash.h
+    MinersLib/RandomHash/RandomHashCLMiner.h
+    MinersLib/RandomHash/RandomHashCPUMiner.h
+    MinersLib/RandomHash/RandomHashHostCudaMiner.h
+    MinersLib/RandomHash/RandomHash_core.h
+    MinersLib/RandomHash/RandomHash_def.h
+    MinersLib/RandomHash/RandomHash_inl.h
+    MinersLib/RandomHash/RandomHash_mersenne_twister.h
+    MinersLib/RandomHash/RandomHash_MurMur3_32.h
     rhminer/ClientManager.h
     rhminer/CommandLineManager.h
    )
 
 set(SOURCES
-    MinersLib/Pascal/RandomHash_Cpu.cpp
-    MinersLib/Pascal/RandomHashCLMiner.cpp
-    MinersLib/Pascal/RandomHashCPUMiner.cpp
-    MinersLib/Pascal/RandomHashHostCudaMiner.cpp
+    MinersLib/RandomHash/RandomHash_Cpu.cpp
+    MinersLib/RandomHash/RandomHashCLMiner.cpp
+    MinersLib/RandomHash/RandomHashCPUMiner.cpp
+    MinersLib/RandomHash/RandomHashHostCudaMiner.cpp
     MinersLib/CLMinerBase.cpp
     MinersLib/Farm.cpp
     MinersLib/GenericCLMiner.cpp
@@ -141,7 +166,7 @@ set(SOURCES
     corelib/CommonData.cpp
     corelib/FixedHash.cpp
     corelib/Log.cpp
-    corelib/PascalWork.cpp
+    corelib/WorkPackage.cpp
     corelib/utils.cpp
     corelib/Worker.cpp
     corelib/miniweb.cpp
@@ -150,25 +175,24 @@ set(SOURCES
     rhminer/main.cpp
    )
    
-find_package(jsoncpp REQUIRED)
-include_directories(${JSONCPP_INCLUDE_DIRS})
-link_libraries(${JSONCPP_LIBRARIES})
+find_package(JsonCpp)
+include_directories(${JsonCpp_INCLUDE_DIRS})
+link_libraries(${JsonCpp_LIBRARIES})
 
 set(Boost_USE_STATIC_LIBS   ON)
-set(JSONCPP_LIB_BUILD_STATIC ON)
+set(JsonCpp_LIB_BUILD_STATIC ON)
 
 find_package( Boost REQUIRED COMPONENTS atomic chrono system thread )
 include_directories(${Boost_INCLUDE_DIR})
 link_libraries(${BOOST_LIBRARIES})
 
-
-if(RH_CPU_ONLY)
+#if(RH_CPU_ONLY)
     set(PU_SPEC "cpu")
-else(RH_CPU_ONLY)
-    set(RH_CUDA_LIB cudalib)
-    set(RH_OCLL OpenCL)
-    add_subdirectory(cudalib)
-endif(RH_CPU_ONLY)
+#else(RH_CPU_ONLY)
+#    set(RH_CUDA_LIB cudalib)
+#    set(RH_OCLL OpenCL)
+#    add_subdirectory(cudalib)
+#endif(RH_CPU_ONLY)
 
 #CHECK_INCLUDE_FILE (syslog.h HAVE_SYSLOG_H)
 #if (HAVE_SYSLOG_H)
@@ -179,6 +203,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/rhminer_${RH_ARCH})
 message(STATUS "Output directory is ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES})
-target_link_libraries(${PROJECT_NAME} ${RH_CUDA_LIB} ${LIBS} ${LIBRARIES} ${EXTRA_LIBS} jsoncpp_lib_static ${CMAKE_DL_LIBS} ${Boost_ATOMIC_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${RH_OCLL})
+target_link_libraries(${PROJECT_NAME} ${RH_CUDA_LIB} ${LIBS} ${LIBRARIES} ${EXTRA_LIBS} ${JsonCpp_LIBRARY} ${CMAKE_DL_LIBS} ${Boost_ATOMIC_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${RH_OCLL})
+target_compile_options(${PROJECT_NAME} PRIVATE -Wno-inconsistent-missing-override)
+target_compile_options(${PROJECT_NAME} PRIVATE -Wno-unused-function)
+
 
 

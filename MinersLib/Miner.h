@@ -26,7 +26,7 @@
 
 #include "corelib/Log.h"
 #include "corelib/Worker.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "wrapnvml.h"
 #include "wrapadl.h"
 #include "GpuManager.h"
@@ -146,7 +146,7 @@ public:
 
 	virtual void submitProof(SolutionSptr sol) = 0;
     virtual bool isMining() const = 0;
-    virtual void RequestNewWork(PascalWorkSptr wp, GenericCLMiner* miner) = 0;
+    virtual void RequestNewWork(WorkPackageSptr wp, GenericCLMiner* miner) = 0;
     virtual void ReconnectToServer(U32 minerRelIndex) =0;
 };
 
@@ -163,7 +163,7 @@ public:
     virtual bool WorkLoopStep() = 0;
     virtual void Kill();
     virtual void Pause();
-    virtual void SetWork(PascalWorkSptr _work);
+    virtual void SetWork(WorkPackageSptr _work);
     virtual void SetWorkpackageDirty();
     virtual PlatformType GetPlatformType() { return PlatformType_None; }
 
@@ -180,10 +180,10 @@ public:
     virtual void    GetTemp(U32& temp, U32& fan);
     
 protected:
-    virtual bool    init(const PascalWorkSptr& work) = 0;
-    virtual bool    ShouldInitialize(const PascalWorkSptr& work) = 0;
+    virtual bool    init(const WorkPackageSptr& work) = 0;
+    virtual bool    ShouldInitialize(const WorkPackageSptr& work) = 0;
 
-    PascalWorkSptr  GetWork() const { Guard l(m_workMutex); return m_workTemplate; }
+    WorkPackageSptr GetWork() const { Guard l(m_workMutex); return m_workTemplate; }
     virtual void    AddHashCount(U64 hashes);
 
     std::atomic<bool> m_isInitializing;
@@ -201,18 +201,18 @@ protected:
     U32             m_accumNewWorkDeltaTimeCount = 0;
     const string    c_DummyMinerName = "DummyMiner";
 
-    U64              m_hashCount = 0;   
+    U64              m_hashCount = 0;   //NOTE: CPU platform we do hash*1000 so we can have near 0 hash/sec
     U64              m_hashCountTime = U64_Max;
     U64              m_resetHash = 0;
     
     Event           m_workReadyEvent; //only set when work is null
-    PascalWorkSptr  m_workTemplate;
+    WorkPackageSptr m_workTemplate;
 	mutable Mutex   m_workMutex;
     U32             m_workpackageDirty = 0;
 
     //temperature monitor and control
-	wrap_nvml_handle *m_nvmlh = NULL;
-	wrap_adl_handle *m_adlh = NULL;
+	//wrap_nvml_handle *m_nvmlh = NULL;
+	//wrap_adl_handle *m_adlh = NULL;
 
     GpuManager::GPUInfos*  m_gpuInfoCache = 0;
 };

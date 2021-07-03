@@ -13,7 +13,7 @@
 //
 //* Copyright 2018 Polyminer1 <https://github.com/polyminer1>
 
-#include "MinersLib/Pascal/RandomHash_def.h"
+#include "MinersLib/RandomHash/RandomHash_def.h"
 #include "corelib/basetypes.h"
 
 
@@ -28,21 +28,21 @@ struct MurmurHash3_x86_32_State
 {
     union
 	{
-		uint8_t         buf[4]; 
+		uint8_t         buf[4]; //pending
     	uint32_t		buf32;
 	} U;
-    uint32_t        idx;    
+    uint32_t        idx;    //pending size
     uint32_t        totalLen = 0;
     uint32_t        h1 = 0;
 };
 
 
 #define RH_MUR3_BACKUP_STATE(state)                 \
-register uint32_t        back_buf = (state)->U.buf32;     \
-register uint32_t        back_idx = (state)->idx;              \
-register uint32_t        back_totalLen = (state)->totalLen;    \
-register uint32_t        back_h1 = (state)->h1;                \
-register uint32_t        back_i = 0;
+uint32_t        back_buf = (state)->U.buf32;     \
+uint32_t        back_idx = (state)->idx;              \
+uint32_t        back_totalLen = (state)->totalLen;    \
+uint32_t        back_h1 = (state)->h1;                \
+uint32_t        back_i = 0;
 
 #define RH_MUR3_RESTORE_STATE(state)                 \
 (state)->U.buf32 = back_buf; \
@@ -72,6 +72,25 @@ inline void MurmurHash3_x86_32_Init(uint32_t seed, MurmurHash3_x86_32_State* sta
     state->totalLen = 0;
     state->h1 = 0;
 }
+
+/*
+#define INPLACE_M_MurmurHash3_x86_32_Update_1(chunk8)  \
+{                                                      \
+    RH_ASSERT(back_idx != 0xDEADBEEF)                \
+    RH_ASSERT(back_idx != 4);                        \
+    back_totalLen++;                                   \
+    uint32_t h1 = back_h1;                             \
+    back_buf &= ~(0xFF << (back_idx*8));               \
+    back_buf |= (chunk8 << (back_idx*8));              \
+    back_idx++;                                        \
+    if (back_idx == 4)                                 \
+    {                                                  \
+        MURMUR3_BODY(back_buf)                         \
+        back_idx = 0;                                  \
+    }                                                  \
+    back_h1 = h1;                                      \
+}
+*/
 
 #define INPLACE_M_MurmurHash3_x86_32_Update_1(chunk8)  \
 {                                                      \

@@ -445,7 +445,7 @@ void RandomHash_Grindahl512(RH_StridePtr roundInput, RH_StridePtr output)
 	state[0] = RH_swap_u64(state[0]);
 
 	InjectMsg(state, temp, true);
-	for (register uint32_t i = 0; i < 8; i++)
+	for (uint32_t i = 0; i < 8; i++)
 	{
 		InjectMsg(state, temp, true);
 	} 

@@ -18,13 +18,20 @@
 
 #define SHA2_512_BLOCK_SIZE 128
 
+//DO the job for 384 and 512
+
+
 void SHA2_512_RoundFunction(uint64_t* data, uint64_t* state)
 {
     uint64_t T0, T1, a, b, c, d, e, f, g, h;
 
+    //scratch buffer 64 uint32
     uint64_t beData[128];
     for (a = 0; a < 128 / 8; a++)
-        beData[a] = ReverseBytesUInt64(data[a]); 
+        beData[a] = ReverseBytesUInt64(data[a]); //swap 64 first bytes
+
+    // Step 1
+
     T0 = beData[16 - 15];
     T1 = beData[16 - 2];
     beData[16] = ((ROTL64(T1, 45)) ^ (ROTL64(T1, 3)) ^ (T1 >> 6)) + beData[16 - 7] + ((ROTL64(T0, 63)) ^ (ROTL64(T0, 56)) ^ (T0 >> 7)) + beData[0];
@@ -226,6 +233,9 @@ void SHA2_512_RoundFunction(uint64_t* data, uint64_t* state)
     f = state[5];
     g = state[6];
     h = state[7];
+
+    // Step 2
+
     h = h + (0x428A2F98D728AE22 + beData[0] + ((ROTL64(e, 50)) ^ (ROTL64(e, 46)) ^ (ROTL64(e, 23))) + ((e & f) ^ (~e & g)));
 
     d = d + h;
@@ -641,6 +651,8 @@ void SHA2_512_RoundFunction(uint64_t* data, uint64_t* state)
 
 inline void RandomHash_SHA2_512(RH_StridePtr roundInput, RH_StridePtr output, SHA2_512_MODE mode)
 {
+
+    // optimized algo 
     RH_ALIGN(64) uint64_t state[8];
     switch (mode)
     {
@@ -689,6 +701,7 @@ inline void RandomHash_SHA2_512(RH_StridePtr roundInput, RH_StridePtr output, SH
             state[7] = 0x0EB72DDC81C52CA2;;
         }break;
     }
+    //body
     int64_t oriLen = RH_STRIDE_GET_SIZE(roundInput);
     int64_t len = oriLen;
     uint32_t blockCount = (uint32_t)len / SHA2_512_BLOCK_SIZE;
@@ -700,9 +713,11 @@ inline void RandomHash_SHA2_512(RH_StridePtr roundInput, RH_StridePtr output, SH
         dataPtr += SHA2_512_BLOCK_SIZE / 8;
         blockCount--;
     }
-	register uint64_t lowBits, hiBits;
-	register int32_t padindex;
-    RH_ALIGN(64) uint8_t pad[256];
+    
+    //finish
+	uint64_t lowBits, hiBits;
+	int32_t padindex;
+    RH_ALIGN(64) uint8_t pad[/*255*/256];
 	    
 	lowBits = oriLen << 3;
 	hiBits = oriLen >> 61;
@@ -738,6 +753,7 @@ inline void RandomHash_SHA2_512(RH_StridePtr roundInput, RH_StridePtr output, SH
         SHA2_512_RoundFunction(dataPtr + (SHA2_512_BLOCK_SIZE/8), state);
     RH_ASSERT(padindex > -SHA2_512_BLOCK_SIZE);
 
+    //get the hash result IN BE
     dataPtr = RH_STRIDE_GET_DATA64(output);
     switch (mode)
     {

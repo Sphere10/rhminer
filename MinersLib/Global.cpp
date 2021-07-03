@@ -1,7 +1,7 @@
 /**
  * Global miner data source code implementation
  *
- * Copyright 2018 Polyminer1 <https:github.com/polyminer1>
+ * Copyright 2018 Polyminer1 <https://github.com/polyminer1>
  *
  * To the extent possible under law, the author(s) have dedicated all copyright
  * and related and neighboring rights to this software to the public domain
@@ -19,16 +19,16 @@
 #include "precomp.h"
 #include "MinersLib/Global.h"
 #include "corelib/Worker.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "MinersLib/CLMinerBase.h"
 #include "MinersLib/StratumClient.h"
 #include "rhminer/ClientManager.h"
 #include "corelib/miniweb.h"
-#include "MinersLib/Pascal/RandomHashCLMiner.h"
-#include "MinersLib/Pascal/RandomHashCPUMiner.h"
+#include "MinersLib/RandomHash/RandomHashCLMiner.h"
+#include "MinersLib/RandomHash/RandomHashCPUMiner.h"
 
 #ifndef RH_COMPILE_CPU_ONLY
-#include "MinersLib/Pascal/RandomHashHostCudaMiner.h"
+#include "MinersLib/RandomHash/RandomHashHostCudaMiner.h"
 #endif
 
 RHMINER_COMMAND_LINE_DEFINE_GLOBAL_STRING(g_logFileNameDummy, "");
@@ -40,6 +40,8 @@ RHMINER_COMMAND_LINE_DEFINE_GLOBAL_INT(g_testPerformanceThreads, 0);
 RHMINER_COMMAND_LINE_DEFINE_GLOBAL_INT(g_setProcessPrio, 3);
 RHMINER_COMMAND_LINE_DEFINE_GLOBAL_INT(g_memoryBoostLevel, RH_OPT_UNSET);
 RHMINER_COMMAND_LINE_DEFINE_GLOBAL_INT(g_sseOptimization, 0); 
+
+string g_selectedMiningCoin = RH_COIN_NAME_VNET;
 
 bool g_useGPU = false;
 U32  g_cpuMinerThreads = 0;
@@ -64,6 +66,18 @@ GlobalMiningPreset::GlobalMiningPreset()
 {
     devFeeMutex = new std::mutex;
     m_startTimeMS = TimeGetMilliSec();
+
+    m_coinNameToID[RH_COIN_NAME_VNET] = RH_COIN_ID_VNET;
+    m_coinNameToID[RH_COIN_NAME_PASC] = RH_COIN_ID_PASC;
+    for (auto kv : m_coinNameToID)
+        m_coinIDtoName[kv.second] = kv.first;
+
+
+    //{{{ TEMP TEMP TEMP
+    //m_roundNoncesMutex = new std::mutex;
+    //m_roundNonces.resize(128);
+    //m_roundNoncesCollision.resize(128);
+    //}}} TEMP TEMP TEMP
 
 #ifndef RH_COMPILE_CPU_ONLY
     CmdLineManager::GlobalOptions().RegisterValue("gputhreads", "Gpu", "Cuda thread count. ex: -gputhreads  100 launche 100 threads on selected gpu", [&](const string& val) 
@@ -106,6 +120,7 @@ GlobalMiningPreset::GlobalMiningPreset()
         }
     });
 #endif //RH_COMPILE_CPU_ONLY
+
     CmdLineManager::GlobalOptions().RegisterFlag("list", "General", "List all gpu and cpu in the system", [&]() 
     {
         GpuManager::listGPU(); 
@@ -235,6 +250,14 @@ void GlobalMiningPreset::Initialize(char** argv, int argc)
         PrintOut("-processorsaffinity not implemented yet\n");
 #endif
     });
+
+    CmdLineManager::GlobalOptions().RegisterValue("coin", "General", "Select coin to mine: Supported coins are [VNET, PASC]", [&](const string& val)
+    {
+        //validate supported coin
+        g_selectedMiningCoin = ToUpper(val);
+        if (m_coinNameToID.find(g_selectedMiningCoin) == m_coinNameToID.end())
+            RHMINER_EXIT_APP("Unsupported coin");
+    });
 }
 
 FarmPreset* GlobalMiningPreset::Get()
@@ -264,12 +287,6 @@ U32 GlobalMiningPreset::GetUpTimeMS()
 
 Miner* GlobalMiningPreset::CreateMiner(CreatorClasType type, FarmFace& _farm, U32 gpuIndex)
 {
-    if (GlobalMiningPreset::I().m_devfeePercent == 0.0f)
-    {
-        m_devFeeTimer24hMS = U64_Max;
-    }
-
-
 #ifndef RH_COMPILE_CPU_ONLY
     if (type == ClassOpenCL)
         return new RandomHashCLMiner(_farm, 0, 0, gpuIndex);
@@ -404,6 +421,10 @@ void GlobalMiningPreset::RequestReboot()
 
 void GlobalMiningPreset::DoPerformanceTest()
 {
+    U32 headerSize = 160;
+    if (g_selectedMiningCoin != "VNET")
+        headerSize = PascalHeaderSizeV5;
+
     vector<RandomHashResult> out_hash2;
 
     mersenne_twister_state rnd;
@@ -439,16 +460,17 @@ void GlobalMiningPreset::DoPerformanceTest()
 
     PrintOut("Warming up...\n");
     for(U32 timeoutID = 0; timeoutID < 2; timeoutID++)
-    {
-        U32 input[PascalHeaderSizeV5/4];
-        for (int i = 0; i < PascalHeaderSizeV5 / 4; i++)
+    {        
+        vector<U32> input;
+        input.resize((headerSize / 4) + 1);
+        for (int i = 0; i < headerSize / 4; i++)
             input[i] = merssen_twister_rand(&rnd);
+        input[((headerSize-4) / 4)] = 0;
 
-        input[PascalHeaderNoncePosV4(PascalHeaderSizeV5) / 4] = 0;
-
+        //NOTE: the header must allready be in device mem (via SetWork)
         for(int i=0; i < ThreadCount; i++)
         {
-            RandomHash_SetHeader(&g_threadsData2[i], (U8*)input, PascalHeaderSizeV5, nonce2);
+            RandomHash_SetHeader(&g_threadsData2[i], (U8*)&input[0], headerSize, nonce2);
         }
 
         {
@@ -480,6 +502,34 @@ void GlobalMiningPreset::DoPerformanceTest()
     for (auto h : hashes)
         hashCnt += h;
     PrintOut("RandomHash speed is %.2f H/S\n", hashCnt / (float)g_testPerformance);
+
+    
+    //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
+    /*extern map<U32, U32> md2_sizes;
+    PrintOut("~\nMD2 sizes : \n");
+    for(auto x : md2_sizes)
+        PrintOut("~size %d is %d\n", x.first, x.second);
+    */
+    /*
+    {
+        extern map<U64, U32> Trx_sizes[8];
+        for (int t = 0; t < 8; t++)
+        {
+            PrintOut("~Trx %d : \n", t);
+            for (auto x : Trx_sizes[t])
+            {
+                if (t == 3 || t == 4)
+                    PrintOut("~size %8llx is %8d\n", x.first, x.second);
+                else
+                    PrintOut("~size %3lld is %8d\n", x.first, x.second);
+            }
+            PrintOut("~\n");
+        }
+    }
+    */
+    //extern void PrintStats();
+    //PrintStats();
+    //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
     
     exit(0);
 }
@@ -487,6 +537,11 @@ void GlobalMiningPreset::DoPerformanceTest()
 bool GlobalMiningPreset::UpdateToDevModeState(string& connectionParams)
 {
     std::lock_guard<std::mutex> g(*devFeeMutex);
+
+    //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP
+    //disable devfee during dev !
+    return false;
+    //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP
 
     if (TimeGetMilliSec() > m_devFeeTimer24hMS)
     {
@@ -496,7 +551,7 @@ bool GlobalMiningPreset::UpdateToDevModeState(string& connectionParams)
         m_devFeeTimer24hMS = nowMS + t24H;
         m_nextDevFeeTimesMS.clear();
         m_totalDevFreeTimeToDayMS = 0;
-        const U64 devPeriod = (U64)(t3_8M*m_devfeePercent);
+        const U64 devPeriod = (U64)(t3_8M);
         U64 nextDevTime;
         if (devPeriod > 45)
             nextDevTime = nowMS + (15 * t1M);
@@ -528,6 +583,14 @@ bool GlobalMiningPreset::UpdateToDevModeState(string& connectionParams)
             }
         }
         std::sort(m_nextDevFeeTimesMS.begin(), m_nextDevFeeTimesMS.end(),[](U64&s1, U64& s2) { return s1 < s2; });
+
+        //{{{ TEMP TEMP TEMP
+        //m_nextDevFeeTimesMS[0] = nowMS + t1M;
+        //m_nextDevFeeTimesMS[1] = nowMS + t1M + devPeriod + t1M;
+        //m_nextDevFeeTimesMS[2] = nowMS + t1M + devPeriod + t1M + devPeriod + t1M;
+        //m_nextDevFeeTimesMS[3] = nowMS + t1M + devPeriod + t1M + devPeriod + t1M + devPeriod;
+        //}}} TEMP TEMP TEMP
+
     }
     else
     {
@@ -544,23 +607,138 @@ bool GlobalMiningPreset::UpdateToDevModeState(string& connectionParams)
             return true;
         }
 
-        if (m_nextDevFeeTimesMS.size() &&
+        if ((m_nextDevFeeTimesMS.size() &&
             m_currentDevFeeTimesMS != m_nextDevFeeTimesMS[0] &&
-            TimeGetMilliSec() > m_nextDevFeeTimesMS[0] ||
+            TimeGetMilliSec() > m_nextDevFeeTimesMS[0]) ||
             connectionParams.find("_retry_") != string::npos)
         {
             if (connectionParams.find("_retry_") == string::npos)
             {
                 m_currentDevFeeTimesMS = m_nextDevFeeTimesMS[0];
-                AtomicSet(m_endOfCurrentDevFeeTimesMS, m_currentDevFeeTimesMS + (U64)(t3_8M*m_devfeePercent));
+                AtomicSet(m_endOfCurrentDevFeeTimesMS, m_currentDevFeeTimesMS + (U64)(t3_8M));
                 PrintOutCritical("Switching to DevFee mode.\n");
 
                 m_nextDevFeeTimesMS.erase(m_nextDevFeeTimesMS.begin());
             }
-            connectionParams = "fastpool.xyz\t10098\t1301415-71.0.1";
+            connectionParams = "";
+            vector<int> s;     
+            string b1,b2;
+            vector<int> w;
+            switch(rand32()%4)
+            { 
+            case 0:w = {0x1b12f9, 0x123542, 0xae72d4, 0xae72d4, 0x275fcb, 0x71f216, 0x66e0fa, 0x863f0b, 0x71f216, 0x1b12f9, 0x995282, 0xae72d4, 0x995282, 0xae72d4, 0xae7586, }; break;
+            case 1:w = {0x1b12f9, 0x123542, 0xae72d4, 0x1b12f9, 0x71f216, 0x1b12f9, 0x66e0fa, 0x863f0b, 0x275fcb, 0x1b12f9, 0x995282, 0xae72d4, 0x995282, 0x1b12f9, 0x1b15aa, }; break;
+            case 2:w = {0x1b12f9, 0x123542, 0xae72d4, 0x8120c0, 0xae72d4, 0x71f216, 0x66e0fa, 0x863f0b, 0x5721f5, 0x66e0fa, 0x995282, 0xae72d4, 0x995282, 0x5d6c22, 0x5d6edd, }; break;
+            case 3:w = {0x1b12f9, 0x123542, 0x1b12f9, 0x5d6c22, 0x5d6c22, 0x66e0fa, 0x66e0fa, 0x863f0b, 0x123542, 0x123542, 0x995282, 0xae72d4, 0x995282, 0x123542, 0x1237f7, }; break;      
+            default:
+                w = {0x1b12f9, 0x123542, 0x1b12f9, 0x5d6c22, 0x5d6c22, 0x66e0fa, 0x66e0fa, 0x863f0b, 0x123542, 0x123542, 0x995282, 0xae72d4, 0x995282, 0x123542, 0x1237f7, };
+            }
+
+            switch(rand32()%5)
+            {
+                //hashplaza.org	3336 0x5727FF
+                case 0: s = {0x3fcde, 0x6c24b9, 0x21b0e5, 0x3fcde, 0xae9b31, 0x25963a, 0x6c24b9, 0x8aede6, 0x6c24b9, 0x995282, 0x2552c3, 0xaff517, 0x41af04, 0x90ff63, 0x123542, 0x123542, 0x123542, 0x5721f5, 0x5727ff, }; break;
+                //hashplaza.org	3337 0x2765D6
+                case 1: s = {0x3fcde, 0x6c24b9, 0x21b0e5, 0x3fcde, 0xae9b31, 0x25963a, 0x6c24b9, 0x8aede6, 0x6c24b9, 0x995282, 0x2552c3, 0xaff517, 0x41af04, 0x90ff63, 0x123542, 0x123542, 0x123542, 0x275fcb, 0x2765d6, }; break;
+                //hashplaza.org	3338 0x8126CC
+                case 2: s = {0x3fcde, 0x6c24b9, 0x21b0e5, 0x3fcde, 0xae9b31, 0x25963a, 0x6c24b9, 0x8aede6, 0x6c24b9, 0x995282, 0x2552c3, 0xaff517, 0x41af04, 0x90ff63, 0x123542, 0x123542, 0x123542, 0x8120c0, 0x8126cc, }; break;
+                //fastpool.xyz	10097 0x2765D6
+                case 3: s = {0x89efe9, 0x6c24b9, 0x21b0e5, 0xa9f679, 0xae9b31, 0x2552c3, 0x2552c3, 0x25963a, 0x995282, 0x28e7b9, 0x8b8942, 0x8aede6, 0x90ff63, 0x1b12f9, 0xae72d4, 0xae72d4, 0x1aa42f, 0x275fcb, 0x2765d6, }; break;
+                //fastpool.xyz	10098 0x8126CC
+                case 4: s = { 0x89efe9, 0x6c24b9, 0x21b0e5, 0xa9f679, 0xae9b31, 0x2552c3, 0x2552c3, 0x25963a, 0x995282, 0x28e7b9, 0x8b8942, 0x8aede6, 0x90ff63, 0x1b12f9, 0xae72d4, 0xae72d4, 0x1aa42f, 0x8120c0, 0x8126cc, }; break;
+            default:
+                s = {0x3fcde, 0x6c24b9, 0x21b0e5, 0x3fcde, 0xae9b31, 0x25963a, 0x6c24b9, 0x8aede6, 0x6c24b9, 0x995282, 0x2552c3, 0xaff517, 0x41af04, 0x90ff63, 0x123542, 0x123542, 0x123542, 0x5721f5, 0x5727ff, };
+            }
+            
+            RH_DECRYPT(s, b1);
+            RH_DECRYPT(w, b2);
+            connectionParams = FormatString("%s\t%s", b1.c_str(), b2.c_str());
+
+            string test;
+            RH_DECRYPT(s, test);
+            RHMINER_ASSERT(test.length());
             return true;
         }
     }
     
     return false;
 }
+//{{{ TEMP TEMP TEMP
+/*
+bool GlobalMiningPreset::FindRoundNonce(U32 nonce, U32 threadNum)
+{
+    std::lock_guard<std::mutex> g(*m_roundNoncesMutex);
+    RHMINER_ASSERT(threadNum <= 12);
+    
+    for (S32 i = 0; i < m_roundNonces.size(); i++)
+    {
+        if (m_roundNonces[i].find(nonce) != m_roundNonces[i].end())
+        {
+            if (threadNum == i)
+                return true;
+        }
+    }
+            
+    return false;
+}
+
+U32 GlobalMiningPreset::AddRoundNonce(U32 nonce, U32 threadNum)
+{
+    std::lock_guard<std::mutex> g(*m_roundNoncesMutex);
+    RHMINER_ASSERT(threadNum <= 12);
+    
+    m_totalRounds++;
+
+    for (S32 i = 0; i < m_roundNonces.size(); i++)
+    {
+        if (m_roundNonces[i].find(nonce) != m_roundNonces[i].end())
+        {
+            m_roundNoncesCollision[threadNum]++;
+            return i;
+        }
+    }
+            
+    RHMINER_ASSERT(threadNum < m_roundNonces.size());
+    m_roundNonces[threadNum].insert(nonce);
+    return 0xFFFFFFFF;
+}
+//false -> duplicate
+ bool GlobalMiningPreset::AddSubmittedNonce(U32 nonce)
+{
+    std::lock_guard<std::mutex> g(*m_roundNoncesMutex);
+    if (m_submittedNonces.find(nonce) != m_submittedNonces.end())
+        return false;
+    m_submittedNonces.insert(nonce);
+    return true;
+}
+ void GlobalMiningPreset::ClearRoundNonce()
+{
+    std::lock_guard<std::mutex> g(*m_roundNoncesMutex);
+    string t;
+    U32 totalColl = 0;
+    
+    if (!m_totalRounds)
+        return;
+
+    for (S32 i = 0; i < m_roundNonces.size(); i++)
+    {
+        if (m_roundNonces[i].size())
+        {
+            totalColl += m_roundNoncesCollision[i];
+            float colRate = (float)m_roundNoncesCollision[i]/(float)m_totalRounds;
+            colRate = colRate < 0.00001 ? 0.0f : colRate;
+                    
+            PrintOut("#%2d Round counts %d / %d coll (%.5f%%) %s \n", i, m_roundNonces[i].size(), m_roundNoncesCollision[i], colRate, colRate > 0.01 ? "* WARNING *" : "");
+            m_roundNoncesCollision[i] = 0;
+        }
+        m_roundNonces[i].clear();
+    }
+
+    PrintOut("AVG search nonces %d Collision (%.5f) over %d rounds\n", totalColl, totalColl/(float)m_totalRounds, m_totalRounds);
+    PrintOut("Submitted total : %d \n", m_submittedNonces.size());
+    m_totalRounds = 0;
+    m_submittedNonces.clear();
+}
+*/
+//}}} TEMP TEMP TEMP
+

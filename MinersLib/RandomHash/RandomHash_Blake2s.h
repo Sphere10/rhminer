@@ -62,7 +62,8 @@ inline int blake2s_compress_SSE2( blake2s_state *S, const uint8_t block[BLAKE2S_
 	uint32_t m[16];
 	uint32_t v[16];
 
-    for( size_t i = 0; i < 16; ++i )
+    //TODO: optimiz -> unroll + MACRO
+	for( size_t i = 0; i < 16; ++i )
 		m[i] = load32_SSE2( block + i * sizeof( m[i] ) );
 
     v[0] = S->h[0];
@@ -135,19 +136,19 @@ int blake2s_update_SSE2( blake2s_state *S, const uint8_t *in, uint64_t inlen )
 
 		if( inlen > fill )
 		{
-			memcpy( S->buf + left, in, fill ); 
+			memcpy( S->buf + left, in, fill ); // Fill buffer
 			S->buflen += fill;
 			blake2s_increment_counter( S, BLAKE2S_BLOCKBYTES );
-			blake2s_compress_SSE2( S, S->buf ); 
-			memcpy( S->buf, S->buf + BLAKE2S_BLOCKBYTES, BLAKE2S_BLOCKBYTES ); 
+			blake2s_compress_SSE2( S, S->buf ); // Compress
+			memcpy( S->buf, S->buf + BLAKE2S_BLOCKBYTES, BLAKE2S_BLOCKBYTES ); // Shift buffer left
 			S->buflen -= BLAKE2S_BLOCKBYTES;
 			in += fill;
 			inlen -= fill;
 		}
-		else 
+		else // inlen <= fill
 		{
 			memcpy(S->buf + left, in, (size_t) inlen);
-			S->buflen += (size_t) inlen; 
+			S->buflen += (size_t) inlen; // Be lazy, do not compress
 			in += inlen;
 			inlen -= inlen;
 		}
@@ -188,7 +189,10 @@ void RandomHash_blake2s(RH_StridePtr roundInput, RH_StridePtr output, U32 bitSiz
 
     RH_ALIGN(64) blake2s_state S;
 	RH_ALIGN(64) blake2s_param P[1];
+    //const int outlen = BLAKE2S_OUTBYTES;
     const int outlen = bitSize / 8;
+	/* Move interval verification here? */
+    
 
 	P->digest_length = outlen;
 	P->key_length    = 0;
@@ -218,6 +222,7 @@ void RandomHash_blake2s(RH_StridePtr roundInput, RH_StridePtr output, U32 bitSiz
 
 	uint32_t *p = ( uint32_t * )( P );
 
+	/* IV XOR ParamBlock */
 	for( size_t i = 0; i < 8; ++i )
 		S.h[i] ^= load32_SSE2( &p[i] );
     

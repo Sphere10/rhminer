@@ -13,8 +13,8 @@
 //
 //* Copyright 2018 Polyminer1 <https://github.com/polyminer1>
 
-#include "MinersLib/Pascal/RandomHash_MurMur3_32_def.h"
-#include "MinersLib/Pascal/PascalCommon.h"
+#include "MinersLib/RandomHash/RandomHash_MurMur3_32_def.h"
+#include "MinersLib/RandomHash/Common.h"
 
 void MurmurHash3_x86_32_Update_8(U64 chunk64, uint32_t len, MurmurHash3_x86_32_State* state)
 {
@@ -26,19 +26,21 @@ void MurmurHash3_x86_32_Update_8(U64 chunk64, uint32_t len, MurmurHash3_x86_32_S
     uint32_t h1 = state->h1;
     int i = 0;
 
+    //sonsume pending bytes
     if (state->idx)
     {
         while(len)
         {
-            while (state->idx < 4 && len)       
+            while (state->idx < 4 && len)       //TODO: optimiz - use switch case
             {
-                U32 b = (U8)(chunk64 >> (i*8)); 
+                U32 b = (U8)(chunk64 >> (i*8)); //TODO: Manage endianness
                 state->U.buf[state->idx] = b;
                 state->idx++;
                 len--;
                 i++;
             }
             
+            //update buf
             if (state->idx == 4)
             {
                 MURMUR3_BODY(state->U.buf32)
@@ -49,25 +51,25 @@ void MurmurHash3_x86_32_Update_8(U64 chunk64, uint32_t len, MurmurHash3_x86_32_S
     else
     {
         const int nblocks = len >> 2;
-        while (i < nblocks)     
+        while (i < nblocks)     //TODO: optimiz - use switch case
         {
-            U32 block = (U32)(chunk64 >> (i*32));   
+            U32 block = (U32)(chunk64 >> (i*32));   //TODO: Manage endianness
             MURMUR3_BODY(block);
             i++;
             RH_ASSERT(i <= 2);
         }
 
-        
+        //save pending end bytes
         i = (nblocks * 4);
-	    while (i < (int)len)        
+	    while (i < (int)len)        //TODO: optimiz - use switch case
         {
             RH_ASSERT(state->idx < 4);
-            U32 b = (U8)(chunk64 >> (i*8)); 
+            U32 b = (U8)(chunk64 >> (i*8)); //TODO: Manage endianness
             state->U.buf[state->idx] = b;
             state->idx++;
             i++;
         
-            
+            //update buf
             if (state->idx == 4)
             {
                 MURMUR3_BODY(state->U.buf32)
@@ -81,7 +83,7 @@ void MurmurHash3_x86_32_Update_8(U64 chunk64, uint32_t len, MurmurHash3_x86_32_S
 
 
 
-
+//TODO: optimiz - CUDA: one 'while' on U8 should do better (same upthere)
 #define INPLACE_M_MurmurHash3_x86_32_Update_8(chunk64, _len)         \
 {                                                                    \
     RH_ASSERT(back_idx != 0xDEADBEEF)                              \
@@ -148,7 +150,7 @@ void MurmurHash3_x86_32_Update( const uint8_t* data, int len, MurmurHash3_x86_32
     uint32_t h1 = state->h1;
     uint32_t a_index = 0;
 
-    
+    //sonsume pending bytes
     if (state->idx && len)
     {
         while (state->idx < 4 && len)
@@ -158,7 +160,7 @@ void MurmurHash3_x86_32_Update( const uint8_t* data, int len, MurmurHash3_x86_32
             len--;
         }
             
-        
+        //update buf
         if (state->idx == 4)
         {
             MURMUR3_BODY(state->U.buf32)
@@ -169,7 +171,27 @@ void MurmurHash3_x86_32_Update( const uint8_t* data, int len, MurmurHash3_x86_32
     {
         //assert(0);
     }
-
+/*
+    //allign ptr for cuda
+    while (((((size_t)data + a_index)) % 8) && len)
+    {
+        while (state->idx < 4 && len)
+        {
+            state->U.buf[state->idx++] = *(data+ a_index);
+            a_index++;
+            len--;
+        }
+            
+        //update buf
+        if (state->idx == 4)
+        {
+            MURMUR3_BODY(*(uint32_t*)state->U.buf)
+            state->idx = 0; 
+        }
+    }
+*/
+    //----------
+    // body
     int i = 0;
     const int nblocks = len >> 2;
     const uint32_t * blocks = (const uint32_t *)(data + a_index);
@@ -179,12 +201,14 @@ void MurmurHash3_x86_32_Update( const uint8_t* data, int len, MurmurHash3_x86_32
         i++;
     }
 
+    //save pending end bytes
     uint32_t offset = a_index + (nblocks * 4);
 	while (offset < (len + a_index))
     {
         RH_ASSERT(state->idx < 4);
         state->U.buf[state->idx++] = *(data + offset++);
         
+        //update buf
         if (state->idx == 4)
         {
             MURMUR3_BODY(state->U.buf32)
@@ -199,6 +223,8 @@ inline uint32_t MurmurHash3_x86_32_Finalize( MurmurHash3_x86_32_State* state)
 {
     RH_ASSERT(state->idx != 0xDEADBEEF)
 
+    //----------
+    // tail / finish
     const uint8_t * tail = (const uint8_t*)(state->U.buf);
     uint32_t h1 = state->h1;
     uint32_t k1 = 0;
@@ -213,8 +239,11 @@ inline uint32_t MurmurHash3_x86_32_Finalize( MurmurHash3_x86_32_State* state)
         h1 ^= k1;
     };
 
+    //----------
+    // Finalization
     h1 ^= state->totalLen;
 
+    // Finalization mix - force all bits of a hash block to avalanche
     h1 ^= h1 >> 16;
     h1 *= MurmurHash3_x86_32_c4;
     h1 ^= h1 >> 13;
@@ -230,9 +259,12 @@ inline uint32_t MurmurHash3_x86_32_Finalize( MurmurHash3_x86_32_State* state)
 
 inline uint32_t MurmurHash3_x86_32_Fast(const U8* key, int len)
 {
+    //const uint8_t * data = (const uint8_t*)key;
     RH_ASSERT((size_t(key)% 8) == 0);
     uint32_t h1=0;
 
+    //----------
+    // body    
     S32 n = (len / sizeof(U64)) * sizeof(U64);
     U32 m = len % sizeof(U64);
     const U8* keyEnd = key + n;
@@ -254,6 +286,8 @@ inline uint32_t MurmurHash3_x86_32_Fast(const U8* key, int len)
         key += 4;
     }
 
+    //----------
+    // tail / finish
     uint32_t k1 = 0;
     switch (len & 3)
     {
@@ -266,6 +300,7 @@ inline uint32_t MurmurHash3_x86_32_Fast(const U8* key, int len)
         h1 ^= k1;
     };
     
+    //----------
     h1 ^= len;
 
     h1 ^= h1 >> 16;
@@ -278,5 +313,52 @@ inline uint32_t MurmurHash3_x86_32_Fast(const U8* key, int len)
 }
 
 
+/*
+simple implementation
+uint32_t MurmurHash3_x86_32_Fast(const void * key, int len)
+{
+    const uint8_t * data = (const uint8_t*)key;
+    uint32_t h1 = 0;
+    //----------
+    // body    
+    int i = 0;
+    const int nblocks = len >> 2;
+    const uint32_t * blocks = (const uint32_t *)(data);
+    while (i < nblocks)
+    {
+        MURMUR3_BODY(blocks[i]);
+        i++;
+    }
+    
+    //----------
+    // tail / finish
 
+    const uint8_t * tail = (const uint8_t*)(data + nblocks * 4);
+
+    uint32_t k1 = 0;
+    switch (len & 3)
+    {
+    case 3: k1 ^= tail[2] << 16;
+    case 2: k1 ^= tail[1] << 8;
+    case 1: k1 ^= tail[0];
+        k1 *= MurmurHash3_x86_32_c1; 
+        k1 = ROTL32(k1, 15); 
+        k1 *= MurmurHash3_x86_32_c2; 
+        h1 ^= k1;
+    };
+    
+    //----------
+    h1 ^= len;
+
+    h1 ^= h1 >> 16;
+    h1 *= MurmurHash3_x86_32_c4;
+    h1 ^= h1 >> 13;
+    h1 *= MurmurHash3_x86_32_c5;
+    h1 ^= h1 >> 16;
+
+    extern thread_local U32 _n;
+    DebugOut("#%d = %X\n", _n++, h1);
+    return h1;
+}
+*/
 #endif //RANDOM_HASH_MurMur3_32_h

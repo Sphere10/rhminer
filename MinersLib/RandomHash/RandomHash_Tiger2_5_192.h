@@ -767,7 +767,7 @@ void Tiger2_Transform(uint64_t* inData, uint64_t* state, U32 inRounds)
         b = temp_a;
 
         _rounds++;
-    } 
+    } // end while
 
     state[0] = state[0] ^ a;
     state[1] = b - state[1];
@@ -777,6 +777,7 @@ void Tiger2_Transform(uint64_t* inData, uint64_t* state, U32 inRounds)
 
 void RandomHash_Tiger(RH_StridePtr roundInput, RH_StridePtr output, U32 rounds, U32 bitSize, bool isTiger2 = true)
 {
+    // optimized algo
     const uint32_t Tiger2_BlockSize = 64;
     const uint32_t Tiger2_HashSize = bitSize / 8; 
     RH_ALIGN(64) uint64_t state[3] = {
@@ -796,6 +797,7 @@ void RandomHash_Tiger(RH_StridePtr roundInput, RH_StridePtr output, U32 rounds, 
         blockCount--;
     }
 
+    //finish
     {
         int32_t padindex; 
         RH_ALIGN(64) uint8_t pad[72];
@@ -825,6 +827,7 @@ void RandomHash_Tiger(RH_StridePtr roundInput, RH_StridePtr output, U32 rounds, 
             Tiger2_Transform(dataPtr + (Tiger2_BlockSize / 8), state,rounds);
     }
 
+    //output state
     dataPtr = RH_STRIDE_GET_DATA64(output);
     RH_STRIDE_SET_SIZE(output, Tiger2_HashSize);
     dataPtr[0] = state[0];

@@ -16,6 +16,8 @@
 
 #ifndef _WRAPNVML_H_
 #define _WRAPNVML_H_
+#ifndef RH_COMPILE_CPU_ONLY
+
 
 #if defined(__cplusplus)
 extern "C" {
@@ -123,5 +125,8 @@ int wrap_nvml_get_power_usage(wrap_nvml_handle *nvmlh,
 #if defined(__cplusplus)
 }
 #endif
+
+#endif
+
 
 #endif

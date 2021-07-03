@@ -20,21 +20,25 @@
 
 inline U32 P1(U32 a, U32 b, U32 c)
 {
+    //(a and b) or (not a and c);
     return (a & b) | (~a & c);
 }
 
 inline U32 P2(U32 a, U32 b, U32 c)
 {
+    //(a and b) or (a and c) or (b and c);
     return (a & b) | (a & c) | (b & c);;
 }
 
 inline U32 P3(U32 a, U32 b, U32 c)
 {
+    //a xor b xor c;
     return a ^ b ^ c;
 }
 
 inline void RipemdRoundFunction(uint32_t* data, uint32_t* state)
 {
+    //TConverters.le32_copy(AData, AIndex, @(data[0]), 0, ADataLength);
     U32  a, b, c, d, aa, bb, cc, dd;
 
     a = state[0];
@@ -158,9 +162,11 @@ inline void RipemdRoundFunction(uint32_t* data, uint32_t* state)
 
 void RandomHash_RIPEMD(RH_StridePtr roundInput, RH_StridePtr output)
 {
+    // optimized algo
     RH_ALIGN(64) uint32_t state[5] = { 0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0 };
     RandomHash_MD_BASE_MAIN_LOOP(64, RipemdRoundFunction, uint64_t);
 
+    //get the hash result
     U32* out = RH_STRIDE_GET_DATA(output);
     RH_STRIDE_SET_SIZE(output, 16);
     copy4(out, state);

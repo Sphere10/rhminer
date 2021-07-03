@@ -16,13 +16,16 @@
 
 #include "precomp.h"
 #include "Farm.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "MinersLib/Global.h"
 #include "MinersLib/GpuManager.h"
 
-void Farm::SetWork(PascalWorkSptr _wp)
+void Farm::SetWork(WorkPackageSptr _wp)
 {
 	Guard l(m_farmData.m_workMutex);
+    //{{{ TEMP TEMP TEMP
+    //GlobalMiningPreset::I().ClearRoundNonce();
+    //}}} TEMP TEMP TEMP
     if (m_farmData.m_work.get() && m_farmData.m_work->IsSame(_wp.get()))
     {
         PrintOutWarning("Warning: Identical work package received.\n");
@@ -275,7 +278,7 @@ void Farm::ReconnectToServer(uint32_t gpuAbsIndex)
 }
 
 
-void Farm::RequestNewWork(PascalWorkSptr wp, GenericCLMiner* miner)
+void Farm::RequestNewWork(WorkPackageSptr wp, GenericCLMiner* miner)
 {
     RHMINER_ASSERT(m_requestNeWork);
     m_requestNeWork(wp, miner);

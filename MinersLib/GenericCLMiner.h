@@ -17,9 +17,9 @@
 #pragma once
 
 #include "corelib/Worker.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "MinersLib/CLMinerBase.h"
-#include "MinersLib/Pascal/PascalCommon.h"
+#include "MinersLib/RandomHash/Common.h"
  
 class GenericCLMiner: public CLMinerBase
 {    
@@ -27,7 +27,7 @@ public:
     GenericCLMiner(FarmFace& _farm, unsigned globalWorkMult, unsigned localWorkSize, U32 gpuIndex);
     ~GenericCLMiner();
     void KernelCallBack();
-    virtual bool init(const PascalWorkSptr& work);
+    virtual bool init(const WorkPackageSptr& work);
 
 protected:
     bool IsWorkStalled();
@@ -36,12 +36,11 @@ protected:
     // Get all codes and kernel name
     virtual U32 GetOutputMaxCount(){ return MAX_GPUS; }
     virtual U32 GetOutputBufferSize() {return (GetOutputMaxCount() + 1)*sizeof(U32);}
-    virtual U32 GetHeaderBufferSize() { return PascalHeaderSizeV5 ; }
-
+    virtual U32 GetHeaderBufferSize() { return m_workTemplate->m_fullHeader.size(); }
 
     // must use m_queue in m_context to load/store buffers
     virtual void                  QueueKernel();
-    virtual PrepareWorkStatus     PrepareWork(const PascalWorkSptr& workTempl, bool reuseCurrentWP = false);
+    virtual PrepareWorkStatus     PrepareWork(const WorkPackageSptr& workTempl, bool reuseCurrentWP = false);
     virtual void                  EvalKernelResult();
     virtual SolutionSptr          MakeSubmitSolution(const std::vector<U64>& nonces, U64 nonce2, bool isFromCpuMiner);
     virtual void                  SetSearchKernelCurrentTarget(U32 paramIndex, cl::Kernel& searchKernel);
@@ -59,8 +58,8 @@ protected:
     static const int MaxWorkPackageTimeout = (5 * 60);
     unsigned        m_maxRetryCycleCount = 2;
 
-    PascalWorkSptr m_lastWorkTemplate; 
-    PascalWorkSptr m_currentWp;  
+    WorkPackageSptr m_lastWorkTemplate; 
+    WorkPackageSptr m_currentWp;  
 
     //make a zero buff for fast reset later on
     bytes            m_zeroBuffer;

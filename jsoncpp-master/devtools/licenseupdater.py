@@ -6,7 +6,7 @@ from __future__ import print_function
 # and ends with the first blank line.
 LICENSE_BEGIN = "// Copyright "
 
-BRIEF_LICENSE = LICENSE_BEGIN + """2007-2010 Baptiste Lepilleur
+BRIEF_LICENSE = LICENSE_BEGIN + """2007-2010 Baptiste Lepilleur and The JsonCpp Authors
 // Distributed under MIT license, or public domain if desired and
 // recognized in your jurisdiction.
 // See file LICENSE for detail or copy at http://jsoncpp.sourceforge.net/LICENSE
@@ -20,7 +20,7 @@ def update_license(path, dry_run, show_diff):
       dry_run: if True, just print the path of the file that would be updated,
                but don't change it.
       show_diff: if True, print the path of the file that would be modified,
-                 as well as the change made to the file. 
+                 as well as the change made to the file.
     """
     with open(path, 'rt') as fin:
         original_text = fin.read().replace('\r\n','\n')
@@ -51,7 +51,7 @@ def update_license_in_source_directories(source_dirs, dry_run, show_diff):
       dry_run: if True, just print the path of the file that would be updated,
                but don't change it.
       show_diff: if True, print the path of the file that would be modified,
-                 as well as the change made to the file. 
+                 as well as the change made to the file.
     """
     from devtools import antglob
     prune_dirs = antglob.prune_dirs + 'scons-local* ./build* ./libs ./dist'

@@ -55,20 +55,30 @@ RH_ALIGN(128) static const unsigned char md2_s[] = {
     0x11, 0x83, 0x14
 };
 
+#if !defined(_WIN32_WINNT) || defined(RHMINER_NO_SIMD)
 
-#if !defined(_WIN32_WINNT)
+//TESTED on windows : SLower a little bit. But on Linux FASTER BY ALOT !!!
+/*
+struct md2 
+{
+    RH_ALIGN(128) int L, f;
+    RH_ALIGN(128) unsigned char c[MD2_BLOCK_SIZE];
+    RH_ALIGN(128) unsigned char x[MD2_BLOCK_SIZE * 3];
+};
+*/
 struct RH_ALIGN(128) md2 
 {
-    int L, f;  
+    //On linux(aws) aligining is FASTER, test on windows
+    int L, f;  //NOTE: L,F Faster here than at the end of the struct on ALL linux !
     U8 pad[24];
     union
     {
-        U8  c[MD2_BLOCK_SIZE];      
+        U8  c[MD2_BLOCK_SIZE];      //16
         U64 c64[2];
     } c;
     union
     {
-        U8  x[MD2_BLOCK_SIZE * 3];  
+        U8  x[MD2_BLOCK_SIZE * 3];  //48
         U64 x64[6];
         U32 x32[12];
     } x;
@@ -92,6 +102,15 @@ inline void md2_init(struct md2 *ctx)
     ctx->c.c64[0] = 0;
     ctx->c.c64[1] = 0;
 
+/*
+    ctx->L = 0;
+    ctx->f = 0;
+    __m128i xmm = _mm_set1_epi8((char)0); 
+    RH_MM_STORE128(((__m128i *)ctx->x)+0, xmm); 
+    RH_MM_STORE128(((__m128i *)ctx->c)+0, xmm); 
+    RH_MM_STORE128(((__m128i *)ctx->c)+1, xmm); 
+    RH_MM_STORE128(((__m128i *)ctx->c)+2, xmm);
+*/
 }
 
 
@@ -102,6 +121,7 @@ inline void md2_append(struct md2 *ctx, const void *buf, size_t len)
 
     m = (const unsigned char*)buf;
     while (len) {
+        /* Absorb input block */
         for (; len && ctx->f < 16; len--, ctx->f++) {
             int b = *m++;
             ctx->x.x[ctx->f + 16] = b;
@@ -109,7 +129,7 @@ inline void md2_append(struct md2 *ctx, const void *buf, size_t len)
             ctx->L = ctx->c.c[ctx->f] ^= md2_s[b ^ ctx->L];
         }
 
-        
+        /* Transform */
         if (ctx->f == MD2_BLOCK_SIZE) {
             ctx->f = 0;
             t = 0;
@@ -129,12 +149,14 @@ inline void md2_append_N(struct md2 *ctx,const char N, size_t len)
     const unsigned char *m;
 
     while (len) {
+        /* Absorb input block */
         for (; len && ctx->f < 16; len--, ctx->f++) {
             ctx->x[ctx->f + 16] = N;
             ctx->x[ctx->f + 32] = N ^ ctx->x[ctx->f];
             ctx->L = ctx->c[ctx->f] ^= md2_s[N ^ ctx->L];
         }
 
+        /* Transform */
         if (ctx->f == MD2_BLOCK_SIZE) {
             ctx->f = 0;
             t = 0;
@@ -150,15 +172,41 @@ inline void md2_append_N(struct md2 *ctx,const char N, size_t len)
 inline void md2_finish(struct md2 *ctx, void *digest)
 {
    int i, n;
+    //unsigned char *out;
+    //RH_ALIGN(128) unsigned char pad[MD2_BLOCK_SIZE];
+    /* Append padding */
     n = MD2_BLOCK_SIZE - ctx->f;
+    //for (i = 0; i < n; i++)
+    //    pad[i] = n;
+    //md2_append(ctx, pad, n);
     md2_append_N(ctx, (char)n, n);
+
+    /* Append checksum */
     md2_append(ctx, ctx->c, sizeof(ctx->c));
+
+    //out = (unsigned char *)digest;
+    //for (i = 0; i < 16; i++)
+    //    out[i] = ctx->x[i];
     memcpy(digest, ctx->x, 16);
 }
 #endif
 
 void RandomHash_MD2(RH_StridePtr roundInput, RH_StridePtr output)
 {
+/*
+    //body
+    U32 msgLen = RH_STRIDE_GET_SIZE(roundInput);
+    U8* message = (U8*)RH_STRIDE_GET_DATA8(roundInput);
+    
+    RH_ALIGN(128) md2 ctx;
+    md2_init(&ctx);
+
+    md2_append(&ctx, message, msgLen);
+
+    RH_STRIDE_SET_SIZE(output, 16);
+    md2_finish(&ctx, RH_STRIDE_GET_DATA(output));
+*/
+    //body
     U32 msgLen = RH_STRIDE_GET_SIZE(roundInput);
     U8* message = (U8*)RH_STRIDE_GET_DATA(roundInput);
     RH_STRIDE_SET_SIZE(output, 16);
@@ -170,6 +218,8 @@ void RandomHash_MD2(RH_StridePtr roundInput, RH_StridePtr output)
     if (msgLen == 32)
     {
         md2_append(&ctx, message, msgLen);
+
+        // finish n  = 16 padding
         pad[0] = 0x1010101010101010;
         pad[1] = 0x1010101010101010;
         md2_append(&ctx, (U8*)&pad[0], 16);
@@ -177,6 +227,10 @@ void RandomHash_MD2(RH_StridePtr roundInput, RH_StridePtr output)
     else if(msgLen == 100)
     {
         md2_append(&ctx, message, msgLen);
+        //U32 end16 = (msgLen / 16) * 16;
+        //md2_append(&ctx, message, end16);
+        //md2_append(&ctx, message+end16, msgLen-end16);
+
         pad[0] = 0x0c0c0c0c0c0c0c0c;
         pad[1] = 0x0c0c0c0c0c0c0c0c;
         md2_append(&ctx, (U8*)pad, 12);        
@@ -197,9 +251,10 @@ void RandomHash_MD2(RH_StridePtr roundInput, RH_StridePtr output)
 
 struct md2 
 {
-    RH_ALIGN(128) int L, f;  
-    RH_ALIGN(128) unsigned char c[MD2_BLOCK_SIZE];      
-    RH_ALIGN(128) unsigned char x[MD2_BLOCK_SIZE * 3];  
+    //On linux(aws) aligining is FASTER, test on windows
+    RH_ALIGN(128) int L, f;  //NOTE: L,F Faster here than at the end of the struct on ALL linux !
+    RH_ALIGN(128) unsigned char c[MD2_BLOCK_SIZE];      //16
+    RH_ALIGN(128) unsigned char x[MD2_BLOCK_SIZE * 3];  //48
 };
 
 inline void md2_init(struct md2 *ctx)
@@ -215,6 +270,14 @@ inline void md2_init(struct md2 *ctx)
 
 inline void md2_append(struct md2 *ctx, U8 *buf, size_t len)
 {
+    /*
+        MD2 sizes : 
+        size 12 is 48632
+        size 16 is 432890
+        size 32 is 192129
+        size 100 is 48632
+    */
+   
     int j, k, t, _f, _L;
     U8* _x;
     U8* _c;
@@ -226,6 +289,16 @@ inline void md2_append(struct md2 *ctx, U8 *buf, size_t len)
 
     while (len) 
     {
+
+        /*
+        if ((_f%16) == 0)
+        {
+            PrintOut(" NOT ALIGNED f = %d  lenn = %d\n", _f, len);
+            //Cpu0  189711768   NOT ALIGNED f = 0  lenn = 4
+        }
+        */
+
+        /* Absorb input block */
         for (; len && _f < 16; len--, _f++) 
         {
             int b = *buf++;
@@ -235,7 +308,8 @@ inline void md2_append(struct md2 *ctx, U8 *buf, size_t len)
             _L = _c[_f];
         }
 
-        if (_f == MD2_BLOCK_SIZE) 
+        /* Transform */
+        if (_f == MD2_BLOCK_SIZE) //16
         {
             U64 xcf, b;
             _f = 0;
@@ -249,49 +323,49 @@ inline void md2_append(struct md2 *ctx, U8 *buf, size_t len)
 
                     xcf = *(U64*)(void*)(_x + k);
 
-                    tmp = U8(xcf) ^ md2_s[t]; 
+                    tmp = U8(xcf) ^ md2_s[t]; //0
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
                     t = tmp;
 
-                    tmp = U8(xcf) ^ md2_s[t]; 
+                    tmp = U8(xcf) ^ md2_s[t]; //1
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
                     t = tmp;
 
-                    tmp = U8(xcf) ^ md2_s[t]; 
+                    tmp = U8(xcf) ^ md2_s[t]; //2
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
                     t = tmp;
 
-                    tmp = U8(xcf) ^ md2_s[t]; 
+                    tmp = U8(xcf) ^ md2_s[t]; //3
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
                     t = tmp;
 
-                    tmp = U8(xcf) ^ md2_s[t]; 
+                    tmp = U8(xcf) ^ md2_s[t]; //4
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
                     t = tmp;
 
-                    tmp = U8(xcf) ^ md2_s[t]; 
+                    tmp = U8(xcf) ^ md2_s[t]; //5
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
                     t = tmp;
 
-                    tmp = U8(xcf) ^ md2_s[t]; 
+                    tmp = U8(xcf) ^ md2_s[t]; //6
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
                     t = tmp;
 
-                    tmp = U8(xcf) ^ md2_s[t]; 
+                    tmp = U8(xcf) ^ md2_s[t]; //7
                     b |= tmp;
                     t = tmp;
 
@@ -320,18 +394,26 @@ inline void md2_append_16x(struct md2 *ctx, U8* buf, int len)
     _x = ctx->x;
     _f = ctx->f;
     _L = ctx->L;    
-    RH_ASSERT((_f%16) == 0); 
+    RH_ASSERT((_f%16) == 0); //assume all blocks % 16
     while (len)
     {
         for (int j = 0; j < 2; j++)
         {
+            //int b = *m++;
             b = *(U64*)(void*)buf;
             buf += 8;
+
+            //ctx->x[ctx->f + 16] = b;
             *(U64*)(_x + _f + 16) = b;
+
+            //_x[_f + 32] = b ^ _x[_f];
             xcf = *(U64*)(_x + _f);
             *(U64*)(_x + _f + 32) = b ^ xcf;
 
-            xcf = *(U64*)(_c + _f); 
+            //4 times this
+            //c[f] = c[f] ^ md2_s[b ^ L];
+            //L = c[f];
+            xcf = *(U64*)(_c + _f); // = c[_f]
             U64 cf_md2sbl = 0;
             for (int i = 0; i < 8; i++)
             {
@@ -356,36 +438,46 @@ inline void md2_append_16x(struct md2 *ctx, U8* buf, int len)
                 {
                     U8 tmp;
                     b = 0;
+
                     xcf = *(U64*)(void*)(_x + k);
-                    tmp = U8(xcf) ^ md2_s[t]; 
+                    //_x[k] = _x[k] ^ md2_s[t];
+
+                    tmp = U8(xcf) ^ md2_s[t]; //0
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
-                    tmp = U8(xcf) ^ md2_s[tmp]; 
+
+                    tmp = U8(xcf) ^ md2_s[tmp]; //1
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
-                    tmp = U8(xcf) ^ md2_s[tmp]; 
+
+                    tmp = U8(xcf) ^ md2_s[tmp]; //2
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
-                    tmp = U8(xcf) ^ md2_s[tmp]; 
+
+                    tmp = U8(xcf) ^ md2_s[tmp]; //3
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
-                    tmp = U8(xcf) ^ md2_s[tmp]; 
+
+                    tmp = U8(xcf) ^ md2_s[tmp]; //4
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
-                    tmp = U8(xcf) ^ md2_s[tmp]; 
+
+                    tmp = U8(xcf) ^ md2_s[tmp]; //5
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
-                    tmp = U8(xcf) ^ md2_s[tmp]; 
+
+                    tmp = U8(xcf) ^ md2_s[tmp]; //6
                     b |= tmp;
                     b <<= 8;
                     xcf >>= 8;
-                    tmp = U8(xcf) ^ md2_s[tmp]; 
+
+                    tmp = U8(xcf) ^ md2_s[tmp]; //7
                     b |= tmp;
                     t = tmp;
 
@@ -402,10 +494,50 @@ inline void md2_append_16x(struct md2 *ctx, U8* buf, int len)
     ctx->L = _L;
 }
 
+/*
+inline void md2_finish(struct md2 *ctx, U8*digest)
+{
+    int n;
+  
+    RH_ALIGN(128) unsigned char pad[MD2_BLOCK_SIZE];
+    //Append padding
+    n = (MD2_BLOCK_SIZE - ctx->f);
+    const U64 mask = (U64(n)<<(64-8))  |
+                     (U64(n)<<(64-16)) |
+                     (U64(n)<<(64-24)) |
+                     (U64(n)<<(64-32)) |
+                     (U64(n)<<(64-40)) |
+                     (U64(n)<<(64-48)) |
+                     (U64(n)<<(64-56)) |
+                     (U64(n)<<(64-64));
+    *(U64*)pad = mask;
+    if (n > 8)
+        *(((U64*)pad)+1) = mask;
+    
+    if(n == 16)
+        md2_append_16x(ctx, pad, n);
+    else
+        md2_append(ctx, pad, n);
 
+
+
+    // Append checksum 
+    md2_append_16x(ctx, ctx->c, sizeof(ctx->c));
+
+    copy128b(digest, ctx->x);
+}
+
+*/
 
 inline void RandomHash_MD2(RH_StridePtr roundInput, RH_StridePtr output)
 {
+    /*
+        msgLen sizes : 
+        size 32 is 186482
+        size 100 is 47295
+    */
+
+    //body
     U32 msgLen = RH_STRIDE_GET_SIZE(roundInput);
     U8* message = RH_STRIDE_GET_DATA8(roundInput);
     RH_STRIDE_SET_SIZE(output, 16);
@@ -417,6 +549,8 @@ inline void RandomHash_MD2(RH_StridePtr roundInput, RH_StridePtr output)
     if (msgLen == 32)
     {
         md2_append_16x(&ctx, message, msgLen);
+
+        // finish n  = 16 padding
         pad[0] = 0x1010101010101010;
         pad[1] = 0x1010101010101010;
         md2_append_16x(&ctx, (U8*)&pad[0], 16);
@@ -443,4 +577,11 @@ inline void RandomHash_MD2(RH_StridePtr roundInput, RH_StridePtr output)
     out[0] = c[0];
     out[1] = c[1];
 }
+
+//MD2 sizes : 
+//size 4 is   48745
+//size 12 is  48745
+//size 16 is 675370
+
+
 #endif //linux

@@ -17,7 +17,7 @@
 #pragma once
 
 #include "corelib/Worker.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "MinersLib/Miner.h"
 
 class GenericCLMiner;
@@ -35,7 +35,7 @@ public:
 		Stop();
 	}
 
-    void SetWork(PascalWorkSptr _wp);
+    void SetWork(WorkPackageSptr _wp);
     void SetWorkpackageDirty();
     
 
@@ -64,17 +64,17 @@ public:
     MinerSptr       GetCPUMiner();
 
 	using SolutionFound = std::function<bool(SolutionSptr)>;
-    using RequestNewWorkFunc = std::function<void(PascalWorkSptr, GenericCLMiner*)>;    
+    using RequestNewWorkFunc = std::function<void(WorkPackageSptr, GenericCLMiner*)>;    
     using ReconnectFunc = std::function<void(uint32_t )>;
 
 	void onSolutionFound(SolutionFound const& _handler) { m_onSolutionFound = _handler; }
     void onRequestNewWork(RequestNewWorkFunc const& _handler) { m_requestNeWork = _handler;}
     void onReconnectFunc(ReconnectFunc const& _handler) { m_reconnect = _handler; }
 
-    PascalWorkSptr GetWork() const { Guard l(m_farmData.m_workMutex); return m_farmData.m_work; }
+    WorkPackageSptr GetWork() const { Guard l(m_farmData.m_workMutex); return m_farmData.m_work; }
     
     void ReconnectToServer(uint32_t minerRelIndex) override;
-    void RequestNewWork(PascalWorkSptr wp, GenericCLMiner* miner) override;
+    void RequestNewWork(WorkPackageSptr wp, GenericCLMiner* miner) override;
 
 private:
    
@@ -95,7 +95,7 @@ private:
     struct Farmdata
     {
         mutable Mutex                           m_workMutex;
-        PascalWorkSptr                          m_work;
+        WorkPackageSptr                          m_work;
 	    mutable Mutex                           m_progressMutex;
 	    mutable WorkingProgress                 m_progress;
         mutable std::vector<float>              m_minersHasheRatePeak;

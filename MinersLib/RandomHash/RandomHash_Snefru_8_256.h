@@ -619,8 +619,15 @@ PLATFORM_CONST uint32_t RH_ALIGN(64) Snefru_boxes[16][256] = { { 0x64F9001B, 0xF
 void Snefru_8_256_Transform(uint32_t* data, uint32_t* state, U32 SNEFRU_size)
 {
 	uint32_t i, j, k, shift;
-    RH_ALIGN(64) uint32_t work[16]; 
+    RH_ALIGN(64) uint32_t work[16]; //beData
+	
+    //optimize this
+    //memset(work, 0x0, sizeof(work));
+    
+    //uint32_t *ptr_work = &work[0];
 	memcpy(&work[0], &state[0], SNEFRU_size * sizeof(uint32_t));
+
+    //scratch buffer 64 uint32
     uint32_t* part2 = &work[SNEFRU_size];    
     copy8_op(part2, data, ReverseBytesUInt32)
 
@@ -700,7 +707,8 @@ void Snefru_8_256_Transform(uint32_t* data, uint32_t* state, U32 SNEFRU_size)
 
 void RandomHash_Snefru_8_256(RH_StridePtr roundInput, RH_StridePtr output, U32 hashSize = 32)
 {
-    U32 SNEFRU_size = (hashSize / 4); 
+    // init
+    U32 SNEFRU_size = (hashSize / 4); //MAX 8 words (256 bits)
     const U32 SNEFRU_MAX_size = 8;
     const U32 SNEFRU_BlockSize = (64 - hashSize);
 
@@ -719,6 +727,8 @@ void RandomHash_Snefru_8_256(RH_StridePtr roundInput, RH_StridePtr output, U32 h
         dataPtr += SNEFRU_BlockSize / 4;
         blockCount--;
     }
+
+    //finish
 	int32_t padindex;		
     uint32_t pos = len % SNEFRU_BlockSize;
 	if (pos > 0)
@@ -743,6 +753,7 @@ void RandomHash_Snefru_8_256(RH_StridePtr roundInput, RH_StridePtr output, U32 h
     if (padindex > 0)
         Snefru_8_256_Transform(dataPtr+(SNEFRU_BlockSize/4), state, SNEFRU_size);
 
+    //output state
     dataPtr = RH_STRIDE_GET_DATA(output);
     RH_STRIDE_SET_SIZE(output, SNEFRU_size * 4);
     if (SNEFRU_size == 8)

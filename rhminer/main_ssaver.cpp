@@ -108,7 +108,7 @@ void SetStringRegKey(HKEY hKey, const string &strValueName, string &strValue)
 void WriteRegistryOptions(string serverPort, string user, string cpuCount, U32 nonceGraphic)
 {
     HKEY hKey;
-    string regPath = "Software\\PascalCoin\\ScreenSaver";
+    string regPath = "Software\\RandomHash\\ScreenSaver";
     LONG lRes = RegOpenKeyEx(HKEY_CURRENT_USER, regPath.c_str(), 0, KEY_READ | KEY_WRITE, &hKey);
     if ((lRes == ERROR_SUCCESS) || (lRes == ERROR_FILE_NOT_FOUND))
     {
@@ -131,10 +131,10 @@ string ReadRegistryOptions(string& serverPort, string& user, string& cpuCount, s
 {
     nonceGraphic = 0;
     HKEY hKey;
-    string defOpt = "-apiport 0 -v 2 -r 100 -s mine.pool.pascalpool.org:3333 -su 1300378-87.0.Donations -cpu -cputhreads 2 -processpriority 1";
+    string defOpt = "-apiport 0 -v 2 -r 100 -s put-pool-here:3333 -su 1300378-87.0.Donations -cpu -cputhreads 2 -processpriority 1";
     string baseOpt = "-apiport 0 -processpriority 1 -cpu ";
     string defExtra = "-v 2 -r 100 ";
-    string defServerPort = "mine.pool.pascalpool.org:3333";
+    string defServerPort = "put-pool-here:3333";
     string defUSer = "1300378-87.0.Donations";
     string defCpus;
 
@@ -151,7 +151,7 @@ string ReadRegistryOptions(string& serverPort, string& user, string& cpuCount, s
 #endif
 
 
-    string regPath = "Software\\PascalCoin\\ScreenSaver";
+    string regPath = "Software\\RandomHash\\ScreenSaver";
     LONG lRes = RegOpenKeyEx(HKEY_CURRENT_USER, regPath.c_str(), 0, KEY_READ | KEY_WRITE, &hKey);
     if ((lRes == ERROR_SUCCESS) || (lRes == ERROR_FILE_NOT_FOUND))
     {
@@ -442,7 +442,7 @@ LRESULT WINAPI ScreenSaverProc(HWND hWnd, UINT message, WPARAM wparam, LPARAM lp
             GetClientRect(parentHWnd, &rect);
             int Width = rect.right;
             int Height = rect.bottom;
-            LPCTSTR lpszClassName = TEXT("PascalCoinScreenSaverC");
+            LPCTSTR lpszClassName = TEXT("RandomHashCoinScreenSaverC");
             WNDCLASSEX wc;
             ZeroMemory(&wc, sizeof(wc));
             wc.cbSize = sizeof(wc);

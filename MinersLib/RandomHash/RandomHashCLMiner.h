@@ -16,7 +16,7 @@
 #pragma once
 
 #include "corelib/Worker.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "MinersLib/GenericCLMiner.h"
 
 
@@ -27,12 +27,13 @@ class RandomHashCLMiner: public GenericCLMiner
     
 public:
     RandomHashCLMiner(FarmFace& _farm, unsigned globalWorkMult, unsigned localWorkSize, U32 gpuIndex);
-    virtual bool init(const PascalWorkSptr& work);
+    virtual bool init(const WorkPackageSptr& work);
 
     //called only once
     static bool configureGPU();
 
 protected:
     virtual void            QueueKernel();
+    //virtual SolutionSptr    MakeSubmitSolution(const std::vector<U64>& nonces, U64 nonce2, bool isFromCpuMiner);
 };
 

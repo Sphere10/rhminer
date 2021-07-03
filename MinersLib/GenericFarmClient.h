@@ -15,7 +15,7 @@
 /// @copyright Polyminer1
 
 #pragma once
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -27,8 +27,9 @@ class FarmFace;
 class GenericFarmClient
 {
 public:
-    GenericFarmClient(FarmFace* farm, string farmURL, U32 port, string farmFailOverURL, string email)
+    GenericFarmClient(FarmFace* farm, string coin, string farmURL, U32 port, string farmFailOverURL, string email)
     {
+        m_miningCoin = coin;
         m_farm = farm;
         m_farmURL = farmURL;
         m_port = port;
@@ -36,9 +37,9 @@ public:
         m_email = email;
     }
 
-    virtual PascalWorkSptr getWork()
+    virtual WorkPackageSptr getWork()
     {
-    	return PascalWorkSptr();
+    	return WorkPackageSptr();
     }
 
     virtual bool submitWork(SolutionSptr sol)
@@ -57,6 +58,7 @@ public:
     }
 
 protected:
+    string      m_miningCoin;
     FarmFace*   m_farm;
     string      m_farmURL;
     U32         m_port;

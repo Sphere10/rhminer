@@ -18,7 +18,7 @@
 #pragma once
 
 #include "corelib/Common.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 
 #ifndef RH_COMPILE_CPU_ONLY
 

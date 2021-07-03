@@ -1,8 +1,11 @@
 /*
 * Wrappers to emulate dlopen() on other systems like Windows
 */
+#ifndef RH_COMPILE_CPU_ONLY
+
 #if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
+
 static void *wrap_dlopen(const char *filename) {
 	return (void *)LoadLibrary(filename);
 }
@@ -25,4 +28,5 @@ static void *wrap_dlsym(void *h, const char *sym) {
 static int wrap_dlclose(void *h) {
 	return dlclose(h);
 }
+#endif
 #endif

@@ -47,11 +47,13 @@ void RandomHashHostCudaMiner::InitFromFarm(U32 relativeIndex)
     RandomHashCLMiner::InitFromFarm(relativeIndex);
 }
 
-bool RandomHashHostCudaMiner::init(const PascalWorkSptr& work)
+bool RandomHashHostCudaMiner::init(const WorkPackageSptr& work)
 {
+    //Global thread counts must be perfect ratio of localWorkSize    
     if ((m_globalWorkSize % m_gpuInfoCache->localWorkSize) != 0)
         RHMINER_EXIT_APP("Global thread counts must be perfect ratio of localWorkSize");
 
+    //init is mem intensive (alloc + memcpy), so we prevent other gpu to do it all at the same time !
     std::lock_guard<std::mutex> g(*gs_sequentialBuildMutex);
 
     CudaMinerValues cudaInit;
@@ -63,6 +65,7 @@ bool RandomHashHostCudaMiner::init(const PascalWorkSptr& work)
     cudaInit.m_globalWorkSize = m_globalWorkSize;
     cudaInit.m_outputBufferSize = GetOutputBufferSize();
     
+    //from GenericCLMiner
     if (m_hashCountTime == U64_Max)
         m_hashCountTime = TimeGetMilliSec();
 
@@ -75,14 +78,15 @@ bool RandomHashHostCudaMiner::init(const PascalWorkSptr& work)
     return m_isInitialized;
 }
 
-PrepareWorkStatus RandomHashHostCudaMiner::PrepareWork(const PascalWorkSptr& workTempl, bool reuseCurrentWP)
+PrepareWorkStatus RandomHashHostCudaMiner::PrepareWork(const WorkPackageSptr& workTempl, bool reuseCurrentWP)
 {
     PrepareWorkStatus workStatus = RandomHashCLMiner::PrepareWork(workTempl, reuseCurrentWP);
      
     if (workStatus == PrepareWork_NewWork)
     {    
-        PascalWorkPackage* wp = workTempl.get();
+        WorkPackage* wp = workTempl.get();
         
+        // Upper 64 bits of the boundary.
         m_cudaMinerProxy->SetTarget(m_currentWp->GetDeviceTargetUpperBits64());
 
         CudaWorkPackage cudaWP;
@@ -114,6 +118,7 @@ void RandomHashHostCudaMiner::EvalKernelResult()
             nonces.push_back(nonces32[i]);
         }
         
+        //ajust our nonce to the RandomHashCUDAMiner one 
         m_startNonce = baseNonce64;
         SolutionSptr solPtr = MakeSubmitSolution(nonces, m_currentWp->m_nonce2, false);
         m_farm.submitProof(solPtr);

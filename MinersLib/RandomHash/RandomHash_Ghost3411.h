@@ -675,7 +675,7 @@ void rhash_gost12_512_init(gost12_ctx* ctx)
 
 inline void rhash_gost12_LPSX(const U64* a, const U64* b, U64* result)
 {
-    register U64 r0, r1, r2, r3, r4, r5, r6, r7;
+    U64 r0, r1, r2, r3, r4, r5, r6, r7;
     int i;
 
     /* calculate rhash_gost12_xor_uint512(a, b) */

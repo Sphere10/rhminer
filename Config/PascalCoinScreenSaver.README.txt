@@ -1,0 +1,13 @@
+To install PascalCoin ScreenSaver simply right-click on file PascalCoinScreenSaver.scr and click "install" from the menu.
+Then you can configure it.
+For Laptop users it is STROGLY recommented to set only 1 thread in the scrensaver's config.
+
+The screen saver display a nonce graphic fore very nonce tested by RandomHash.
+When a valid nonce if found an icon will be displayed at the nonce position (orange icon when screensaver graphics is not "Icon", blue icon screensaver graphic is "Icon")
+The list of screensaver graphics are as foloow:
+    - small dot in orange hue
+    - big dots in orange hue
+    - PascalCoin icons (Blue icons when nonce is found)
+    - Black. Display a black screen with no graphics but speed and found nonces remains on screen.
+    - Full Black. Nothing is displayed except a black screen.
+    

@@ -17,7 +17,7 @@
 #pragma once
 
 #include "corelib/Worker.h"
-#include "corelib/PascalWork.h"
+#include "corelib/WorkPackage.h"
 #include "MinersLib/Miner.h"
 #include "GpuManager.h"
 #include "rhminer/CommandLineManager.h"
@@ -45,9 +45,9 @@ public:
 
     //Base API
     void            ClearKernels();
-    virtual bool    BuildKernels(const PascalWorkSptr& work);
+    virtual bool    BuildKernels(const WorkPackageSptr& work);
     void            AddPreBuildFunctor(PreBuildFunctor f) { m_OnPrebuildKernel.push_back(f); }
-    virtual bool    ShouldInitialize(const PascalWorkSptr& work);
+    virtual bool    ShouldInitialize(const WorkPackageSptr& work);
     virtual void    InitFromFarm(U32 i);
     virtual bool    WorkLoopStep() { RHMINER_EXIT_APP("9"); return false; }
 
@@ -58,7 +58,7 @@ public:
 
 protected:
     // create buffers and init states
-    virtual bool                        init( const PascalWorkSptr& work);
+    virtual bool                        init( const WorkPackageSptr& work);
     virtual KernelCodeAndFuctions       GetKernelsCodeAndFunctions() = 0;
 
     cl::Kernel  GetKernel(U32 codeID, const char* name);

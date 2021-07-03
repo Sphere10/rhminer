@@ -27,6 +27,10 @@
 error
 #endif
 
+    
+/* MD5_F, MD5_G and MD5_H are basic MD5 functions: selection, majority, parity */
+
+//todo optimiz -> intrinsics
 #define MD5_F(x, y, z) (((x) & (y)) | ((~x) & (z)))
 #define MD5_G(x, y, z) (((x) & (z)) | ((y) & (~z)))
 #define MD5_H(x, y, z) ((x) ^ (y) ^ (z))
@@ -193,6 +197,7 @@ void md5(uint32_t *in, uint32_t *state)
 
 void RandomHash_MD5(RH_StridePtr roundInput, RH_StridePtr output)
 {
+    //Optimized ALGO
     RH_ALIGN(64) uint32_t state[4] = { MD5_a0, MD5_b0, MD5_c0, MD5_d0 };
     RandomHash_MD_BASE_MAIN_LOOP(MD5_BLOCKSIZE, md5, uint64_t);
 

@@ -72,10 +72,10 @@ void CLMinerBase::UpdateWorkSize(U32 absoluteVal)
                 if (m_gpuInfoCache->localWorkSize)
                     m_localWorkSize = m_gpuInfoCache->localWorkSize;
                 else
-                    m_localWorkSize = m_globalWorkSize / m_gpuInfoCache->maxGroupSize;
+                    m_localWorkSize = m_globalWorkSize / (U32)m_gpuInfoCache->maxGroupSize;
                 
                 if (m_gpuInfoCache->isOpenCL)
-                    m_globalWorkSize = m_gpuInfoCache->maxGroupSize;
+                    m_globalWorkSize = (U32)m_gpuInfoCache->maxGroupSize;
                 else
                     m_globalWorkSize = RHMINER_FLOOR(m_globalWorkSize, 8); ////round GWS to 8
             }
@@ -144,7 +144,7 @@ bytes* CLMinerBase::AllocQueuedBuffer(size_t size)
 }
 
 
-bool CLMinerBase::init(const PascalWorkSptr& work)
+bool CLMinerBase::init(const WorkPackageSptr& work)
 {
     AddPreBuildFunctor([&](string& code) 
     {
@@ -210,7 +210,7 @@ bool CLMinerBase::init(const PascalWorkSptr& work)
 }
 
 //default : wcheck the init flag to start init or not
-bool CLMinerBase::ShouldInitialize(const PascalWorkSptr& work)
+bool CLMinerBase::ShouldInitialize(const WorkPackageSptr& work)
 {
     return !m_isInitialized;
 }
@@ -234,7 +234,7 @@ void ConbineAll(const vector<vector<string> > &allVecs, size_t vecIndex, string 
 }
 
 
-bool CLMinerBase::BuildKernels(const PascalWorkSptr& work)
+bool CLMinerBase::BuildKernels(const WorkPackageSptr& work)
 {
 #ifndef RH_COMPILE_CPU_ONLY
     //build programs

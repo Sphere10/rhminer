@@ -34,7 +34,7 @@
 //#include <pthread.h>
 #include <condition_variable>
 
-#if defined(MACOS_X) || (defined(__APPLE__) & defined(__MACH__))
+#if defined(IS_MAC_OS_X)
     #include <sys/syslimits.h>
     #include <mach-o/dyld.h>
 #else
@@ -92,6 +92,7 @@ extern void GetSysTimeStrF(char* buf, size_t buffSize, const char* frmt, bool ad
 extern const char* FormatString(const char * pFormat, ... );
 extern string      TrimString(const string& str);
 extern string      TrimZeros(const string& str, bool tailing, bool heading);
+extern string      MakeSpaces(U32 count, char character = ' ');
 extern char*       stristr(const char *string, const char *Pattern);
 extern bool        ReplaceString(string& str, const char* toFind, const char* toReplace);
 extern void        ReplaceStringALL(string& str, const char* toFind, const char* toReplace);

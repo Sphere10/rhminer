@@ -26,7 +26,7 @@ RHMINER_COMMAND_LINE_DECLARE_GLOBAL_INT("displayspeedtimeout", g_DisplaySpeedTim
 class BaseMinerClient: public Worker
 {
 public:
-    BaseMinerClient(const char* threadName) :Worker(threadName){}
+    BaseMinerClient(const char* threadName, string coin) :m_miningCoin(coin), Worker(threadName){}
     virtual ~BaseMinerClient() {};
     bool IsRunning() {return m_running;}
 
@@ -47,6 +47,7 @@ protected:
 
 	/// Mining options
 	bool m_running = true;
+    string m_miningCoin;
 };
 
 //------------------------------------------------------------------------------------------------------------------
@@ -54,7 +55,7 @@ protected:
 class GenericMinerClient: public BaseMinerClient
 {
 public:
-    GenericMinerClient();
+    GenericMinerClient(string coin);
     template <typename CL_MINER>
     void InitGpu()
     {
@@ -76,6 +77,11 @@ public:
             RHMINER_EXIT_APP("");
         }
 
+        if (GlobalMiningPreset::I().m_coinNameToID.find(m_miningCoin) == GlobalMiningPreset::I().m_coinNameToID.end())
+        {
+            PrintOut("Invalid coin name.\n");
+            RHMINER_EXIT_APP("");
+        }
 
         if (stratumAutoPtrRef.get() == 0)
         {
@@ -85,6 +91,7 @@ public:
                             farmInfos->m_port, 
                             farmInfos->m_user, 
                             farmInfos->m_pass, 
+                            m_miningCoin,
                             farmInfos->m_maxFarmRetries+1, 
                             farmInfos->m_email, 
                             farmInfos->m_soloOvertStratum)));

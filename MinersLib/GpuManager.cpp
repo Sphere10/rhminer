@@ -27,7 +27,9 @@
 #endif
 
 #ifdef _MSC_VER
-#include <intrin.h>
+    #ifndef RHMINER_NO_SIMD
+        #include <intrin.h>
+    #endif    
 #endif
 
 #ifndef _WIN32_WINNT
@@ -35,7 +37,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#if defined(MACOS_X) || (defined(__APPLE__) & defined(__MACH__))
+#if defined(IS_MAC_OS_X)
    #include <sys/syslimits.h>
    #include <sys/sysctl.h>
 #else
@@ -299,9 +301,10 @@ void GpuManager::SetPostCommandLineOptions()
     if (g_memoryBoostLevel == RH_OPT_UNSET)
     {
         g_memoryBoostLevel = CpuInfos.numberOfCores == CpuInfos.numberOfProcessors ? 0 : 1; //enable boost on hyperthreads cpu
-#if defined(MACOS_X) || (defined(__APPLE__) & defined(__MACH__))
+#if defined(IS_MAC_OS_X)
         if (stristr(CpuInfos.cpuBrandName.c_str(), "xeon") ||
-            stristr(CpuInfos.cpuBrandName.c_str(), "epyc"))
+            stristr(CpuInfos.cpuBrandName.c_str(), "epyc") ||
+            stristr(CpuInfos.cpuBrandName.c_str(), "Apple M"))
             g_memoryBoostLevel = 0;
 #endif
     }
@@ -337,6 +340,7 @@ void GpuManager::SetPostCommandLineOptions()
     PrintOut("Detecting old-gen cpu.\n");
 
 #endif //#ifdef RHMINER_ENABLE_SSE4
+
 }
 
 void GpuManager::LoadGPUMap() 
@@ -672,17 +676,21 @@ U32 GpuManager::GetAllGpuThreadsCount(U32& enabledGpuCount)
 }
 
 
-#ifdef __GNUC__
-
+#if defined(__GNUC__)
 void __cpuidex(int cpuid[4], int func_id, int subfunc_id)
 {
+    memset(cpuid, 0, sizeof(cpuid));
+#if !defined(IS_MAC_OS_X)
     asm volatile ("cpuid"
         : "=a" (cpuid[0]), "=b" (cpuid[1]), "=c" (cpuid[2]), "=d" (cpuid[3])
         : "0" (func_id), "2" (subfunc_id));
+#endif
 }
 
 void __cpuid(int* cpuinfo, int info)
 {
+    *cpuinfo = 0;
+#if !defined(IS_MAC_OS_X)
 	__asm__ __volatile__(
 		"xchg %%ebx, %%edi;"
 		"cpuid;"
@@ -690,18 +698,23 @@ void __cpuid(int* cpuinfo, int info)
 		:"=a" (cpuinfo[0]), "=D" (cpuinfo[1]), "=c" (cpuinfo[2]), "=d" (cpuinfo[3])
 		:"0" (info)
 	);
+#endif
 }
 
 unsigned long long _xgetbv(unsigned int index)
 {
-	unsigned int eax, edx;
+    unsigned int eax = 0;
+    unsigned int edx = 0;
+#if !defined(IS_MAC_OS_X)
 	__asm__ __volatile__(
 		"xgetbv;"
 		: "=a" (eax), "=d"(edx)
 		: "c" (index)
 	);
+#endif
 	return ((unsigned long long)edx << 32) | eax;
 }
+
 #else
 // Helper function to count set bits in the processor mask.
 DWORD CountSetBits(ULONG_PTR bitMask)
@@ -870,7 +883,7 @@ void GpuManager::LoadCPUInfos()
     string line;
     string brand;
 
-#if defined(MACOS_X) || (defined(__APPLE__) & defined(__MACH__))
+#if defined(IS_MAC_OS_X)
     char buf[100];
     size_t buflen = 100;
     sysctlbyname("machdep.cpu.brand_string", &buf, &buflen, NULL, 0);

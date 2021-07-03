@@ -20,6 +20,7 @@
 #include "MinersLib/GenericMinerClient.h"
 #include "MinersLib/StratumClient.h"
 
+
 struct ActiveClientsData
 {
     std::shared_ptr<GenericMinerClient> client;
