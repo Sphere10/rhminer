@@ -137,7 +137,6 @@ protected:
     virtual void ProcessExtranonce(Json::Value& responseObject);
 
     virtual void CallMiningSubscribeMethod();
-    virtual void CallSubmit(SolutionSptr solution);
     virtual void RespondExtraNonceSubscribe(const string& method, Json::Value& responseObjectd, U64 extraParam);
     virtual void RespondAuthorize(Json::Value& responseObject, U64 extraParam);
     virtual void RespondMiningSubmit(Json::Value& responseObject, U64 extraParam, U64 lastMethodCallTime);
@@ -244,8 +243,12 @@ protected:
     U64         m_cleanTime = 0;
     U32         m_soloJobId = 0;
 
-    virtual void ProcessMiningNotifySolo(Json::Value& arrayParam);
-    virtual void RespondMiningSubmitSolo(Json::Value& stratumData, U32 gpuIndex);
+    //Solo interface
+    virtual char* GetMinerSubmitRpcName() = 0;
+    virtual char* GetMinerNotifyRpcName() = 0;
+    virtual void ProcessMiningNotifySolo(Json::Value& arrayParam) = 0;
+    virtual void CallSubmit(SolutionSptr solution) = 0;
+    virtual void RespondMiningSubmitSolo(Json::Value& stratumData, U32 gpuIndex) = 0;
 };
 typedef std::shared_ptr<StratumClient> StratumClientSptr;
 
@@ -286,31 +289,4 @@ inline Json::Value JsonGetSafeArray(Json::Value& responseObject, const char* fie
         return Json::Value::null;
     }
 }
-
-
-//TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
-//GetWork fakeStrarum 
-class GetWorkerVNET : public StratumClient
-{
-public:
-    GetWorkerVNET(const StratumInit& initData) :StratumClient(initData) {}
-
-    //Hack to use Stratum to send getwork
-    virtual void WorkLoop() override;
-    virtual void CallMiningSubscribeMethod() {}
-    virtual void StopFarming() {}
-    virtual void Disconnect() {}
-    //virtual void StartWorking() {}
-    //virtual void Reconnect(U32 preSleepMS = 0) {}
-
-
-    //void ProcessMiningNotifySolo(Json::Value& jsondata)
-    void ProcessReponse(Json::Value& jsondata);
-    virtual void CallSubmit(SolutionSptr solution);
-
-protected:
-    U32 m_getWorkTimeSec = 0;
-};
-
-
 

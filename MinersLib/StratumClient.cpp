@@ -187,7 +187,6 @@ void StratumClient::SetDevFeeCredentials(const string& param)
 void StratumClient::Connect()
 {
     m_workID = 0;
-
     Preconnect();
     
     if (m_connected && m_lastActiveHost != m_active->host)
@@ -230,7 +229,6 @@ void StratumClient::Reconnect(U32 preSleepTimeMS)
 	m_authorized = false;
 	m_connected = false;
     m_workID = 0;
-
     //dont wait to much in devfee mode
     if (GlobalMiningPreset::I().IsInDevFeeMode())
         preSleepTimeMS = 1000;
@@ -965,130 +963,6 @@ void StratumClient::RespondExtraNonceSubscribe(const string& method, Json::Value
 }
 
 
-void StratumClient::ProcessMiningNotifySolo(Json::Value& jsondata)
-{
-    string retVal;
-    Json::Value arayparams = jsondata.get("params", Json::Value::null);
-    Json::Value params = arayparams.get((Json::Value::ArrayIndex)0, 0);    
-
-    U32 i = 0;
-    U32 block = params.get("block", 0).asUInt();
-    U64 timestamp = params.get("timestamp", 0).asUInt64();
-    if (block != m_lastBlock || timestamp != m_lastTimestamp)
-    {
-        bool cleanFlag = false;
-        if (m_lastBlock != block || timestamp-m_lastTimestamp > 61 || TimeGetMilliSec() > m_cleanTime)
-        {
-            cleanFlag = true;
-            m_cleanTime = TimeGetMilliSec() + 61 * 1000;
-        }
-
-        m_lastBlock = block;
-        m_lastTimestamp = timestamp;
-
-        U32 version = params.get("version", 0).asUInt();
-        string coinbase1 = params.get("part1", "").asString(); //part 1
-        string payload = params.get("payload_start", "").asString();
-        string coinbase2 = params.get("part3", "").asString(); //part 3
-        U64 target = params.get("target", 0).asUInt64();
-        string targetPOWstr = params.get("target_pow", "").asString();
-
-        string nTime = toHex((U32)timestamp);
-
-        string nonce1;
-        char LocalPayloadData[67] = {0};
-        strncpy(LocalPayloadData, "rhminer.rhminer.rhminer.rhminer.rhminer.rhminer.rhminer.polyminer1", sizeof(LocalPayloadData)-1);
-        if (g_extraPayload.length())
-        {
-            //filter
-            for (auto& c : g_extraPayload)
-            {
-                if (c < 32 || c > 126)
-                    c = 32;
-            }
-            memset(LocalPayloadData, 32, 66 - 11);
-            memcpy(LocalPayloadData , g_extraPayload.c_str(), RH_Min((size_t)(66 - 11), g_extraPayload.length()) ); 
-            LocalPayloadData[66] = 0;
-        }
-
-        if (payload.length() > 52)
-        {
-            //NOTE: there is a bug in the wallet where it will resent the last submited payload in the next mining notify. 
-            //      If this error recure more than 2 times in a row, just restart the wallet.
-            RHMINER_EXIT_APP("Error. Deamon/Wallet miner name is too long. Set a name under 26 caracters.\nNOTE, if this error persist, just restart the demaon/wallet.");
-        }
-        else
-        {
-            m_nonce1 = payload + toHex((void*)LocalPayloadData, 26-(payload.length()/2), false);
-        }
-
-        h256 targetPow;
-        h256 soloTargetPow;
-        h256 normBoud = h256(fromHex(targetPOWstr));
-        swab256((void*)targetPow.data(), normBoud.data());
-        soloTargetPow = targetPow;
-
-        //Compute difficulty in float
-        double d64, dcut64;
-        d64 = 1.0f * truediffone;
-        dcut64 = le256todouble(targetPow.data());
-        if (!dcut64)
-            dcut64 = 1;        
-        float newDiff = (float)(d64 / dcut64);
-        SetStratumDiff(newDiff);
-
-        //reset nonce !
-        m_authorized = true;
-        if (cleanFlag)
-            RequestCleanNonce2();
-
-        //send work to miners
-        WorkPackageSptr newWork = InstanciateWorkPackage();
-        newWork->Init(toHex(++m_soloJobId), h256("0000000000000000000000000000000000000000000000000000000000000000"), coinbase1, coinbase2, nTime, cleanFlag, m_nonce1, m_nonce2Size, m_extraNonce, m_active->host);
-        newWork->m_soloTargetPow = soloTargetPow;
-        newWork->m_extranoncePos = (U32)(coinbase1.length() + m_nonce1.length()) / 2;
-        SendWorkToMiners(newWork);
-    }
-}
-
-void StratumClient::RespondMiningSubmitSolo(Json::Value& stratumData, U32 gpuIndex)
-{
-    string errorStr = stratumData.get("error", "").asString();
-    if (errorStr.length())
-    {
-        PrintOutCritical("Solution rejected by %s. Reason :%s\n\n", m_active->HostDescr(), errorStr.c_str());
-        m_farm->AddRejectedSolution((U32)gpuIndex);
-    }
-
-    Json::Value resData = stratumData.get("result", Json::Value::null);
-    if (!resData.isNull())
-    {
-        string pow = resData.get("pow", "").asString();
-        string payload = resData.get("payload", "").asString();
-        U64 timeStamp = resData.get("timestamp", 0).asUInt64();
-
-        if (pow.length() && payload.length() && timeStamp)
-        {
-            PrintOutCritical("Solution accepted by %s\n", m_active->HostDescr());
-            string block = resData.get("block", "").asString();
-            PrintOutCritical("Found block %s !!! Pow is %s\n\n", block.c_str(), pow.c_str());
-            
-            m_farm->AddAcceptedSolution((U32)gpuIndex);
-            m_lastSubmitTime = TimeGetMilliSec();
-            
-            Guard g(m_stsMutex);
-            if (timeStamp > m_submittedTimestamp)
-                m_submittedTimestamp = timeStamp;
-        }
-        else
-        {
-            //error
-            PrintOutCritical("Solution rejected by %s. Reason :Deamon/wallet sent incorect submit result\n\n", m_active->HostDescr());
-            m_farm->AddRejectedSolution((U32)gpuIndex);
-        }
-    }
-}
-
 void StratumClient::ProcessReponse(Json::Value& responseObject)
 {
     Json::Value error = responseObject.get("error", Json::Value::null);
@@ -1131,7 +1005,7 @@ void StratumClient::ProcessReponse(Json::Value& responseObject)
         m_jsonrpcVersion = responseObject.get("jsonrpc", "").asString();
     }
 
-    if (id > 0 || resultPresent)
+    if (id > 0 && resultPresent)
     {
         {
             Guard g(m_CallJsonMethodMutex);
@@ -1145,7 +1019,7 @@ void StratumClient::ProcessReponse(Json::Value& responseObject)
                 m_lastCalleJSondMethod.erase(fnd);
             }
         }
-        if (lastMethodName == "miner-submit")
+        if (lastMethodName == GetMinerSubmitRpcName())
         {
             RespondMiningSubmitSolo(responseObject, (U32)gpuIndex);
             return;
@@ -1173,8 +1047,7 @@ void StratumClient::ProcessReponse(Json::Value& responseObject)
         }
     }
 
-    //process feed from the server
-    if (method == "miner-notify")
+    if (method == GetMinerNotifyRpcName())
     {
         if (m_lastReceivedLine != m_lastReceivedMiningNotify)
         {
@@ -1182,6 +1055,7 @@ void StratumClient::ProcessReponse(Json::Value& responseObject)
             ProcessMiningNotifySolo(responseObject);
         }
     }
+    //Process PascalCoin Stratum
     else if (method == "mining.notify")
     {
         if (m_lastReceivedLine != m_lastReceivedMiningNotify)
@@ -1205,7 +1079,7 @@ void StratumClient::ProcessReponse(Json::Value& responseObject)
     }
     else 
     {
-        if (!(resultPresent && responseObject.isMember("error") && error.isNull()))           
+        if (!(resultPresent && responseObject.isMember("error") && error.isNull()))
         {
             if (method.length())
             {
@@ -1288,54 +1162,6 @@ bool StratumClient::Submit(SolutionSptr solution)
     return true;
 }
 
-//TODO: move to PascalStratum
-void StratumClient::CallSubmit(SolutionSptr solution)
-{
-    if (!m_connected)
-        return;
-
-    string params;
-    WorkPackage* cbwp = solution->m_work.get();
-    RHMINER_ASSERT(cbwp);
-
-    U64 currentNonce = solution->GetCurrentEvaluatingNonce();
-    RHMINER_ASSERT(currentNonce <= U32_Max);
-
-    if (IsSoloMining())
-    {
-        U32 nTimeV = ToUIntX(cbwp->m_ntime);
-
-        char payload[64]; 
-        memcpy(payload, &solution->m_work->m_fullHeader[90], 34);
-        payload[34] = 0;
-        PrintOut("Submiting solution %u for %s\n", currentNonce, GpuManager::Gpus[solution->m_gpuIndex].gpuName.c_str());
-
-        params = FormatString("{\"payload\":\"%s\",\"timestamp\":%d,\"nonce\":%d}",
-            toHex((void*)&solution->m_work->m_fullHeader[90], 34).c_str(),
-            nTimeV,
-            currentNonce);
-
-        CallJsonMethod("miner-submit", params, solution->m_gpuIndex);
-    }
-    else
-    {
-        char tstr[32];
-        GetSysTimeStrF(tstr, sizeof(tstr), "%H:%M:%S", false);
-        string nonceHex = toHex(currentNonce);
-
-        PrintOut("Nonce %llX found on %s for job %s at %s. Submitting to %s\n", currentNonce, GpuManager::Gpus[solution->m_gpuIndex].gpuName.c_str(), cbwp->m_jobID.c_str(), tstr, m_active->HostDescr());
-
-        RHMINER_ASSERT(cbwp->m_nonce2 != U32_Max);
-        params = FormatString("\"%s\",\"%s\",\"%llx\",\"%s\",\"%s\"",
-            m_active->user.c_str(),
-            cbwp->m_jobID.c_str(),
-            cbwp->m_nonce2_64,
-            cbwp->m_ntime.c_str(),
-            nonceHex.c_str());
-
-        CallJsonMethod("mining.submit", params, solution->m_gpuIndex);
-    }
-}
 
 WorkPackageSptr StratumClient::InstanciateWorkPackage(WorkPackageSptr* cloneFrom)
 {
@@ -1345,8 +1171,6 @@ WorkPackageSptr StratumClient::InstanciateWorkPackage(WorkPackageSptr* cloneFrom
         //RHMINER_ASSERT(cloned);
         //return WorkPackageSptr(new WorkPackage(*cloned));
         return WorkPackageSptr((*cloneFrom)->Clone());
-
-        #pragma message ("-----------------------------> TODO: need to test en SOLO !!!!!")
     }
     else
     {
@@ -1354,346 +1178,3 @@ WorkPackageSptr StratumClient::InstanciateWorkPackage(WorkPackageSptr* cloneFrom
     }    
 }
 
-
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-bool __is_submiting = false;
-void GetWorkerVNET::WorkLoop()
-{
-    while (m_running)
-    {
-        try
-        {
-            CpuSleep(m_getWorkTimeSec * 1000);
-
-            //while(__is_submiting)
-            //    CpuSleep(1000*60*500);
-
-            //connect
-            Connect();
-
-            //Send GetWork JRPC
-            CallJsonMethod("getwork", "\"MinerVNET\"");
-
-            ProcessServerCommands();
-            if (m_state != WorkerState::Started)
-                break;
-        }
-        catch (std::exception const& _e)
-        {
-            RHMINER_PRINT_EXCEPTION_EX("Connection error", _e.what());
-            CpuSleep(1*1000);
-        }
-        catch (...)
-        {
-            PrintOutCritical("Connection exception\n");
-            CpuSleep(1 * 1000);
-        }
-    }
-}
-
-/*
-* New Miner Block
-* ---------------
-* ATM we're not fixed on one Mining Block structure so the mining package fields are
-* sent, thru json RPC, with a description of it's structure in the field "Config.BlockTemplate".
-* This struture is(must) represent what the NewMinerBlockSerializer class do.
-*
-* The field convension is as follow:
-*	- int/uint are all 32bit uint
-*	- Timestamp, Nonce, MinerNonce, NodeNonce, version...  are 32bit uint
-*	- ExtraNonce is always 64bit uint
-*	- The 2 hash field (MerkelRoot, PreviousBlockHash) are bytes arrray represented as an hexa
-*	  string (without 0x). Size may varry.
-*	- MinerTag must be smaller than Config.TagSize
-*
-* Nonce search space:
-*  To minimize nonce dupliates and double works accross the entire mining network, the nonce search
-*  space is devided into 4 dimensions : Node | Miner | CPU/GPU | Nonce
-*  - NodeNonce :  By convention, this is a the Node GUID. It's unique amongst all nodes in the network.
-*				   It cannot be modified by the miner client.
-*	- MinerNonce : By convention, this is a the miner client LUID. It can be the client's IP, as long as
-*				   it's unique amongst all miners. It cannot be modified by the miner client.
-*	- ExtraNonce : This 64bit search dimention is indented to prevent the Nonce search sub-space to be
-*				   enterely scanned within the block time limit. It must be unique amongst all
-*				   computing unit on the system. It should be modified by the miner.
-*	- Nonce :      The actual nonce sub-space to search. It must be modified by the miner.
-*
-*	To maximize randomness, and minimize dead-pockets(pockets of search space that are skipped due
-*	to "bad" entropy) it is strongly recomended to sparsly distribute the 4 search nonces,
-*	inside the mining block.
-*
-*	Until we settle on a NewMinerBlock structure, we can add/remove/reorder any field without having
-*	to recompile RHminer. The only requirement is that you provide TagSize and BlockTemplate
-*	in the Config object
-*
-*/
-void GetWorkerVNET::ProcessReponse(Json::Value& jsondata)
-{
-    try
-    {
-        string retVal;
-        Json::Value result = jsondata.get("result", Json::Value::null);
-        if (result == Json::Value::null)
-        {
-            PrintOutCritical("Error. Json return call not found.\n");
-            return;
-        }
-        string targetPOWstr = result.get("TargetPOW", "").asCString();
-
-        Json::Value config = result.get("Config", Json::Value::null);
-        string extraNonceSpot;
-        string nonceSpot;
-        string nTime;
-        U32 timeStamp = 0;
-        U32 minerNonce = 0;
-        U32 minerTagPos = 0;
-        U32 extraNoncePos = 0;
-        U32 noncePos = 0;
-        U32 minerTagSize = 64;
-        strings blockTemplate;
-        string blockTemplateStr;
-        if (config != Json::Value::null)
-        {
-            m_getWorkTimeSec = (U32)config.get("maxtime", 0).asUInt();
-            if (m_getWorkTimeSec > 10*60)
-            {
-                PrintOutCritical("Block time to big. Limit is 10 minutes\n");
-                return;
-            }
-
-            minerTagSize = (U32)config.get("tagsize", 0).asUInt();
-            if (ToUpper(config.get("hashalgo", "").asCString()) != "RH2")
-            {
-                PrintOutCritical("Unsupported algo\n");
-                return;
-            }
-
-            blockTemplateStr = config.get("blocktemplate", "").asCString();
-            blockTemplate = GetTokens(blockTemplateStr, ",");
-            if (blockTemplate.size() == 0)
-            {
-                PrintOutCritical("Wrong block template\n");
-                return;
-            }
-        }
-
-        string header;
-        auto ProcessUintField = [&](U32 val) { U32 v = val; return toHex((void*)&v, 4, false); };
-        auto ProcessStringField = [&](string val) { return toHex((void*)val.c_str(), val.length(), false); };
-        auto IsHexArray  = [&](string fieldname) { return (fieldname == "MerkelRoot" || fieldname == "PreviousBlockHash")  ? true: false; };
-        auto AddMinerTagFilling = [&](string minerTag) {
-            U32 tagSize = minerTag.length();
-            if (tagSize > minerTagSize)
-            {
-                PrintOutCritical("Miner tag must be smaller than %d bytes\n", minerTagSize);
-                return string("");
-            }
-            if (tagSize == minerTagSize)
-                return string("");
-    
-            U32 remainingSize = minerTagSize - tagSize;
-            string filler = g_extraPayload;
-            if (filler.length() >= remainingSize)
-                filler = filler.substr(0, remainingSize);
-            else
-            {
-                if (filler.length() < remainingSize - 7)
-                {
-                    filler += MakeSpaces(remainingSize -7 - filler.length());
-                    filler += "rhminer";
-                }
-                else
-                    filler += MakeSpaces(remainingSize - filler.length());
-            }
-            RHMINER_ASSERT(filler.length() == remainingSize);
-
-            return filler;
-        };
-
-        /*
-        
-        finalized version
-
-        header = ProcessUintField(config.get("Version", 0).asUInt());
-        header += ProcessUintField(config.get("BlockNumber", 0).asUInt());
-        header += ProcessStringField(config.get("MerkelRoot", "").asString());
-        minerNonce = config.get("MinerNonce", 0).asUInt();
-        header += ProcessUintField(minerNonce);
-        header += ProcessUintField(config.get("VotingBitMask", 0).asUInt());
-        header += ProcessUintField(config.get("ExtraNonce", 0).asUInt());
-        extraNoncePos = header.length() / 2;
-        //Json saved it as 32bit, make it 64b
-        header += ProcessUintField(0xAAAAAAAA);
-        header += ProcessMinerTag(config.get("MinerTag", "").asString());
-        header += ProcessStringField(config.get("PreviousBlockHash", "").asString());
-        header += ProcessUintField(config.get("Timestamp", 0).asUInt());
-        nTime = toHex((U32)config.get("Timestamp", 0).asUInt());
-        header += ProcessUintField(config.get("NodeNonce", 0).asUInt());
-        noncePos = header.length() / 2;
-        header += ProcessUintField(0xBBBBBBBB);
-        */
-        header.reserve(1024);
-        PrintOut("Mining block template : %s\n", blockTemplateStr.c_str());
-        for (auto const& fieldName : blockTemplate)
-        {
-            Json::Value fieldVal = result.get(fieldName, Json::Value::null);
-            if (IsHexArray(fieldName))
-                header += fieldVal.asString();
-            else if (fieldVal.isUInt())
-                header += ProcessUintField(fieldVal.asUInt());
-            else if (fieldVal.isString())
-                header += ProcessStringField(fieldVal.asString());
-            else
-            {
-                PrintOutCritical("Unsuported field type in block header\n");
-                return;
-            }
-
-            if (fieldName == "MinerNonce")
-                minerNonce = (U32)result.get(fieldName, 0).asUInt();
-
-            if (fieldName == "MinerTag")
-            {
-                string fullTag = AddMinerTagFilling(fieldVal.asString());
-                header += ProcessStringField(fullTag);
-                minerTagPos = (header.length() / 2) - minerTagSize;
-            }
-
-            if (fieldName == "ExtraNonce")
-            {
-                extraNoncePos = (header.length() / 2)-4;
-                //Json saved it as 32bit ! Add another 32b here
-                header += ProcessUintField(0xAAAAAAAA);
-            }
-
-            if (fieldName == "Nonce")
-                noncePos = (header.length() / 2)-4;
-
-            //Header ends on timestamp field
-            if (fieldName == "Timestamp")
-            {
-                timeStamp = result.get("Timestamp", 0).asUInt();
-                nTime = toHex((U32)timeStamp);
-            }
-
-        }
-
-        //TODO: Get ridd of targetPOW in MinerBlockSurogate and calc POW from compactTarget, HERE,  using MonilaTarget algo in c++
-        h256 targetPow;
-        h256 soloTargetPow;
-        h256 normBoud = h256(fromHex(targetPOWstr));
-        swab256((void*)targetPow.data(), normBoud.data());
-        soloTargetPow = targetPow;
-
-        //Compute difficulty in float
-        double d64, dcut64;
-        d64 = 1.0f * truediffone;
-        dcut64 = le256todouble(targetPow.data());
-        if (!dcut64)
-            dcut64 = 1;
-        float newDiff = (float)(d64 / dcut64);
-        SetStratumDiff(newDiff);
-
-        m_authorized = true;
-
-        //send work to miners
-        WorkPackageSptr newWork = InstanciateWorkPackage();
-        newWork->m_extranoncePos = extraNoncePos;
-        newWork->m_noncePos = noncePos;
-        newWork->as<VNetWorkPackage>()->m_minerTagPos = minerTagPos;
-        newWork->as<VNetWorkPackage>()->m_minerTagSize = minerTagSize;
-        newWork->as<VNetWorkPackage>()->m_minerNonce = minerNonce;
-        newWork->as<VNetWorkPackage>()->m_timeStamp = timeStamp;
-
-        //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
-        DebugOut("my header %d/%d %s\n", header.size(), header.size()/2, header.c_str());
-        //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
-        
-        if ((header.size() / 2) > MaxMiningHeaderSize)
-        {
-            RHMINER_EXIT_APP("Error: Header size to big.\n");
-        }
-
-        //Cram all in coinbase1 (as a hack)
-        newWork->Init(toHex(++m_soloJobId), h256("0000000000000000000000000000000000000000000000000000000000000000"), header, "", nTime, false, m_nonce1, m_nonce2Size, m_extraNonce, m_active->host);
-        newWork->m_soloTargetPow = soloTargetPow;
-        SendWorkToMiners(newWork);
-
-        //close connection
-        m_connected = false;
-        m_socket.close();
-    }
-    catch (std::exception const& _e)
-    {
-        RHMINER_PRINT_EXCEPTION_EX("error", _e.what());
-    }
-    catch (...)
-    {
-        PrintOutCritical("exception\n");
-    }
-}
-
-
-void GetWorkerVNET::CallSubmit(SolutionSptr solution)
-{
-    string params;
-    VNetWorkPackage* cbwp = solution->m_work->as<VNetWorkPackage>();
-    RHMINER_ASSERT(cbwp);
-
-    U64 currentNonce = solution->GetCurrentEvaluatingNonce();
-    RHMINER_ASSERT(currentNonce <= U32_Max);
-
-    if (IsSoloMining())
-    {
-        __is_submiting = true;
-
-        //uint minerNonce, string minerTag, uint time, UInt64 extraNonce, uint nonce
-
-        bytes minerTag;
-        minerTag.resize(cbwp->m_minerTagSize);
-        memcpy(&minerTag[0], &solution->m_work->m_fullHeader[0] + cbwp->m_minerTagPos, cbwp->m_minerTagSize);
-
-        PrintOut("Submiting solution %u for %s\n", currentNonce, GpuManager::Gpus[solution->m_gpuIndex].gpuName.c_str());
-
-        //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
-        DebugOut("Submiting header %s\n", toHex(&solution->m_work->m_fullHeader[0], solution->m_work->m_fullHeader.size()).c_str() );
-        //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
-
-        params = FormatString("{\"MinerNonce\":%u, \"MinerTag\":\"%s\",\"Time\":%u,\"ExtraNonce\":%llu,\"Nonce\":%u}",
-            cbwp->m_minerNonce,
-            toHex((void*)&minerTag[0], minerTag.size()).c_str(),
-            cbwp->m_timeStamp,
-            cbwp->m_nonce2_64,
-            currentNonce);
-
-        //HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK TEMP TEMP TEMP
-        Connect();
-        //HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK TEMP TEMP TEMP
-        
-        CallJsonMethod("submit", params, solution->m_gpuIndex);
-
-        //HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK TEMP TEMP TEMP
-        m_connected = false;
-        m_socket.close();
-        //HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK TEMP TEMP TEMP
-    }
-    else
-    {
-        char tstr[32];
-        GetSysTimeStrF(tstr, sizeof(tstr), "%H:%M:%S", false);
-        string nonceHex = toHex(currentNonce);
-
-        PrintOut("Nonce %llX found on %s for job %s at %s. Submitting to %s\n", currentNonce, GpuManager::Gpus[solution->m_gpuIndex].gpuName.c_str(), cbwp->m_jobID.c_str(), tstr, m_active->HostDescr());
-
-        RHMINER_ASSERT(cbwp->m_nonce2 != U32_Max);
-        params = FormatString("\"%s\",\"%s\",\"%llx\",\"%s\",\"%s\"",
-            m_active->user.c_str(),
-            cbwp->m_jobID.c_str(),
-            cbwp->m_nonce2_64,
-            cbwp->m_ntime.c_str(),
-            nonceHex.c_str());
-
-        CallJsonMethod("mining.submit", params, solution->m_gpuIndex);
-    }
-}

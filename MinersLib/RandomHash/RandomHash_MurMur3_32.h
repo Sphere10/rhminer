@@ -31,9 +31,9 @@ void MurmurHash3_x86_32_Update_8(U64 chunk64, uint32_t len, MurmurHash3_x86_32_S
     {
         while(len)
         {
-            while (state->idx < 4 && len)       //TODO: optimiz - use switch case
+            while (state->idx < 4 && len)
             {
-                U32 b = (U8)(chunk64 >> (i*8)); //TODO: Manage endianness
+                U32 b = (U8)(chunk64 >> (i*8));
                 state->U.buf[state->idx] = b;
                 state->idx++;
                 len--;
@@ -51,9 +51,9 @@ void MurmurHash3_x86_32_Update_8(U64 chunk64, uint32_t len, MurmurHash3_x86_32_S
     else
     {
         const int nblocks = len >> 2;
-        while (i < nblocks)     //TODO: optimiz - use switch case
+        while (i < nblocks)
         {
-            U32 block = (U32)(chunk64 >> (i*32));   //TODO: Manage endianness
+            U32 block = (U32)(chunk64 >> (i*32));
             MURMUR3_BODY(block);
             i++;
             RH_ASSERT(i <= 2);
@@ -61,10 +61,10 @@ void MurmurHash3_x86_32_Update_8(U64 chunk64, uint32_t len, MurmurHash3_x86_32_S
 
         //save pending end bytes
         i = (nblocks * 4);
-	    while (i < (int)len)        //TODO: optimiz - use switch case
+	    while (i < (int)len)
         {
             RH_ASSERT(state->idx < 4);
-            U32 b = (U8)(chunk64 >> (i*8)); //TODO: Manage endianness
+            U32 b = (U8)(chunk64 >> (i*8));
             state->U.buf[state->idx] = b;
             state->idx++;
             i++;
@@ -83,7 +83,6 @@ void MurmurHash3_x86_32_Update_8(U64 chunk64, uint32_t len, MurmurHash3_x86_32_S
 
 
 
-//TODO: optimiz - CUDA: one 'while' on U8 should do better (same upthere)
 #define INPLACE_M_MurmurHash3_x86_32_Update_8(chunk64, _len)         \
 {                                                                    \
     RH_ASSERT(back_idx != 0xDEADBEEF)                              \

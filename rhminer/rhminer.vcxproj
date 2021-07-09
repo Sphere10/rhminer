@@ -370,6 +370,8 @@ copy "$(TargetPath)" "$(OutDir)$(TargetName)".scr /Y</Command>
     <ClCompile Include="..\MinersLib\RandomHash\RandomHashCLMiner.cpp" />
     <ClCompile Include="..\MinersLib\RandomHash\RandomHashCPUMiner.cpp" />
     <ClCompile Include="..\MinersLib\RandomHash\RandomHashHostCudaMiner.cpp" />
+    <ClCompile Include="..\MinersLib\StratumClientPASC.cpp" />
+    <ClCompile Include="..\MinersLib\StratumClientVNet.cpp" />
     <ClCompile Include="..\MinersLib\wrapadl.cpp" />
     <ClCompile Include="..\MinersLib\wrapamdsysfs.cpp" />
     <ClCompile Include="..\MinersLib\wrapnvml.cpp" />
@@ -461,6 +463,8 @@ copy "$(TargetPath)" "$(OutDir)$(TargetName)".scr /Y</Command>
     <ClInclude Include="..\MinersLib\RandomHash\RandomHash_Snefru_8_256.h" />
     <ClInclude Include="..\MinersLib\RandomHash\RandomHash_Tiger2_5_192.h" />
     <ClInclude Include="..\MinersLib\RandomHash\RandomHash_Whirlpool.h" />
+    <ClInclude Include="..\MinersLib\StratumClientPASC.h" />
+    <ClInclude Include="..\MinersLib\StratumClientVNet.h" />
     <ClInclude Include="..\MinersLib\wrapadl.h" />
     <ClInclude Include="..\MinersLib\wrapamdsysfs.h" />
     <ClInclude Include="..\MinersLib\wraphelper.h" />

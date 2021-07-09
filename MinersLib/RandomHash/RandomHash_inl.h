@@ -135,7 +135,7 @@ inline void RH_STRIDEARRAY_PUSHBACK_MANY(RH_StrideArrayStruct& strideArrayVar, R
   #else
     RH_STRIDEARRAY_FOR_EACH_BEGIN(strideArrayVarSrc)
     {                                                                           
-        RH_STRIDEARRAY_PUSHBACK(strideArrayVar, strideItrator);  //TODO optimiz : one shot with memcpy
+        RH_STRIDEARRAY_PUSHBACK(strideArrayVar, strideItrator);
         RH_STRIDE_CHECK_INTEGRITY(strideItrator);
     }                                                                           
     RH_STRIDEARRAY_FOR_EACH_END(strideArrayVarSrc)

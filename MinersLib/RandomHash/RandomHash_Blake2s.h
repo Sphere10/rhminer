@@ -62,7 +62,6 @@ inline int blake2s_compress_SSE2( blake2s_state *S, const uint8_t block[BLAKE2S_
 	uint32_t m[16];
 	uint32_t v[16];
 
-    //TODO: optimiz -> unroll + MACRO
 	for( size_t i = 0; i < 16; ++i )
 		m[i] = load32_SSE2( block + i * sizeof( m[i] ) );
 

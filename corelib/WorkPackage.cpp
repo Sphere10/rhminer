@@ -291,7 +291,7 @@ void PascalWorkPackage::UpdateHeader()
     }
 
     string headerStr;
-    headerStr = m_coinbase1 + payload + m_coinbase2 + noncePlaceHolder;  //TODO: adapt to hydrogen
+    headerStr = m_coinbase1 + payload + m_coinbase2 + noncePlaceHolder;
 
     m_fullHeader = fromHex(headerStr, WhenError::Throw);
 

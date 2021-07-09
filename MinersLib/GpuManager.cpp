@@ -320,16 +320,8 @@ void GpuManager::SetPostCommandLineOptions()
 
     if (g_sseOptimization == 2)
     {
-#if defined(RH_ENABLE_AVX)
-        bool avxDisabled = false;
-#else
-        bool avxDisabled = true;
-#endif
-        if (avxDisabled || g_isAVX2Supported == false)
-        {
-            g_sseOptimization = 0;
-            PrintOut("WARNING. AVX not supported. Selecting default optimization level.\n");
-        }
+        g_sseOptimization = 0;
+        PrintOut("WARNING. AVX not supported. Selecting default optimization level.\n");
     }
 
 #else //#ifdef RHMINER_ENABLE_SSE4

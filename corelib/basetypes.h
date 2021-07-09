@@ -96,7 +96,6 @@
     #define CUDA_NOT_ONLY(X) X
 
     //For research purpose only. AVX code is actually slower on most cpu !
-    //#define RH_ENABLE_AVX
 #endif
 
 
@@ -107,10 +106,7 @@
     #define RHMINER_ENABLE_SSE4
 #endif
 
-//TEMP TEMP TEMP TEMP TEMP TEMP TEMP
-//#define RHMINER_NO_SIMD
-//TEMP TEMP TEMP TEMP TEMP TEMP TEMP
-
+//#define RHMINER_NO_SIM
 #ifdef RHMINER_NO_SIMD
     #undef RHMINER_NO_SSE4
     #define RHMINER_NO_SSE4

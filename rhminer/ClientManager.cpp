@@ -16,7 +16,8 @@
 
 #include "precomp.h"
 #include "BuildInfo.h"
-#include "MinersLib/StratumClient.h"
+#include "MinersLib/StratumClientVNet.h"
+#include "MinersLib/StratumClientPASC.h"
 #include "MinersLib/RandomHash/RandomHashCLMiner.h"
 #include "ClientManager.h"
 
@@ -159,9 +160,9 @@ void ClientManager::Initialize()
 
     ActiveClients.client = std::shared_ptr<GenericMinerClient>(new GenericMinerClient(g_selectedMiningCoin));
     if (g_selectedMiningCoin == "VNET")
-        ActiveClients.client->SetStratumClient<GetWorkerVNET>(ActiveClients.stratum);
+        ActiveClients.client->SetStratumClient<StratumClientVNet>(ActiveClients.stratum);
     else
-        ActiveClients.client->SetStratumClient<StratumClient>(ActiveClients.stratum);
+        ActiveClients.client->SetStratumClient<StratumClientPASC>(ActiveClients.stratum);
 
     ActiveClients.client->InitGpu<RandomHashCLMiner>();
 
