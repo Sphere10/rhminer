@@ -52,7 +52,9 @@ Note2: It is not recommended to mine using a laptop.
     From the prompt, cd to the chosen location
     Launch **bootstrap.bat**
     Once finished, compile boost using this command **b2 release debug threading=multi --build-type=complete --toolset=msvc address-model=64 stage**  (NOTE: This can take a long time)
-3.  Open solution, select target "Release_CPU" (or "Release_CPU_OLDGEN for intel cpu without sse3)<br>
+3.  call setx BOOST_ROOT {complete path of where you are at the moment}    
+3.  Close and reopen VisualStudio.
+    Open solution, select target "Release_CPU" (or "Release_CPU_OLDGEN for intel cpu without sse3)<br>
     Hit compile
 4.  Run with proper arguments
 
