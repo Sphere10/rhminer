@@ -232,7 +232,7 @@ PrepareWorkStatus GenericCLMiner::PrepareWork(const WorkPackageSptr& newWorkTemp
 
         m_startNonce = m_currentWp->m_startNonce;
         if (m_startNonce)
-            KernelOffsetManager::Reset(m_startNonce);
+            KernelOffsetManager::Init(m_startNonce);
         
         if (GetPlatformType() != PlatformType_CPU)
         {

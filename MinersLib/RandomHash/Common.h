@@ -18,7 +18,7 @@
 
 const static U32 PascalHeaderSize        = 200; //Fixed header size for pool mining RandomHash1
 const static U32 PascalHeaderSizeV5      = 236; //Fixed header size for pool mining RandomHash2
-static const U32 MaxMiningHeaderSize = 512; //Dynamic, but maxed, for VNet
+static const U32 MaxMiningHeaderSize     = 256; //Dynamic, but maxed, for VNet
 
 #define RH2_StrideArrayCount         (1024+64)  //MAx count during 1 round
 

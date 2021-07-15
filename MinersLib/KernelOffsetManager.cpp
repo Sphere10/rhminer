@@ -27,7 +27,7 @@ extern bool g_forceSequentialNonce;
 U64 KernelOffsetManager::m_value = 0;
 U32 KernelOffsetManager::m_searchNonce = 0;
 
-void KernelOffsetManager::Reset(U64 val)
+void KernelOffsetManager::Init(U64 val)
 { 
     if (!g_forceSequentialNonce)
         val = Rand32Range(0, U32_Max - RHMINER_KB(10));

@@ -231,8 +231,8 @@ void RandomHashCPUMiner::RandomHashCpuKernel(CPUKernelData* kernelData)
                     {
                         std::vector<U64> foundNonce;
                         {
-                            U32 startNonce = resultv2->nonces[w];
-                            foundNonce.push_back(startNonce);
+                            U32 nn = resultv2->nonces[w];
+                            foundNonce.push_back(nn);
                         }
 
                         //{{{ TEMP TEMP TEMP
@@ -306,8 +306,13 @@ bool RandomHashCPUMiner::init(const WorkPackageSptr& work)
     for (int i= 0;i < m_lastHashReading.size(); i++)
         m_lastHashReading[i] = 0;
 
+    U32 seed;
+    if (work->m_startNonce != 0)
+        seed = (U32)work->m_startNonce;
+    else
+        seed = rand32();
 
-    merssen_twister_seed_fast(rand32(), &m_rnd32);
+    merssen_twister_seed_fast(seed, &m_rnd32);
     //merssen_twister_seed_fast(0x19873456, &m_rnd32); //for debug purpose
 
     return true;
@@ -361,13 +366,12 @@ void RandomHashCPUMiner::SendWorkPackageToKernels(WorkPackage* wp, bool requestP
         RHMINER_ASSERT(wp->m_fullHeader.size() <= sizeof(kernelData->m_header.asU8));
 
 #ifdef RH_RANDOMIZE_NONCE2
-        if (!wp->m_isSolo)
+        if (!wp->m_isSolo && m_currentWp->m_extranoncePos)
         {
             //inject new n2
             kernelData->m_nonce2 = merssen_twister_rand_fast(&m_rnd32);
             U64 n264 = m_currentWp->ComputeNonce2((U32)kernelData->m_nonce2);
             //U32 offset = (U32)(m_currentWp->m_coinbase1.length() + m_currentWp->m_nonce1.length()) / 2;
-            RHMINER_ASSERT(m_currentWp->m_extranoncePos != 0);
             U32 offset = m_currentWp->m_extranoncePos;
             string n2str = toHex(n264);
             bytes xbfr = fromHex(n2str);

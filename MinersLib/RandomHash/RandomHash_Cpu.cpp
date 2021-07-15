@@ -646,7 +646,7 @@ void RandomHash_RoundDataUnInit(RH_RoundData* rd, int round)
 
 void RandomHash_SetHeader(RandomHash_State* state, U8* sourceHeader, U32 headerSize, U32 nonce2) 
 {
-    RHMINER_ASSERT(headerSize < MaxMiningHeaderSize);
+    RHMINER_ASSERT(headerSize <= MaxMiningHeaderSize);
     U8* targetInput = state->m_header;
     
     //state->m_isCachedOutputs = false;
