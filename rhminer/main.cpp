@@ -159,7 +159,7 @@ int main(int argc, char** argv)
             "         Be sure to NOT start rhminer from a script in in a loop. \n"
             "         This will cause multiple instance of rhminer ro run\n\n", g_apiPort);
 
-    KernelOffsetManager::Reset(0);
+    KernelOffsetManager::Init(0);
 
 //{{{ TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP
 #if defined(_DEBUG) && 0

@@ -18,6 +18,51 @@
 #include "StratumClientPASC.h"
 #include "RandomHash/Common.h"
 
+bool StratumClientPASC::ProcessMiningNotify(Json::Value& params)
+{
+    int i = 0;
+    string job = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string prevHash = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string hasTries = (params.size() == 10) ? params.get((Json::Value::ArrayIndex)i++, "").asString() : "";
+    string coinbase1 = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string coinbase2 = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    Json::Value merkelArray = params.get((Json::Value::ArrayIndex)i++, 0);
+    string bbver = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string nBit = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string nTime = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    bool   cleanWork = params.get((Json::Value::ArrayIndex)i++, false).asBool();
+
+    if (prevHash.empty())
+        prevHash = "0000000000000000000000000000000000000000000000000000000000000000";
+
+    {
+        //some pool dont process authorization
+        if (!m_authorized)
+        {
+            m_authorized = true;
+        }
+
+        //regardless of cleanWork, we clean nonc2 every 15 min ! Duno what is the best value here ?
+        static U64 firstTimeCalled = TimeGetMilliSec();
+        cleanWork |= (TimeGetMilliSec() - firstTimeCalled > (15 * 60 * 1000)) &&
+            ((TimeGetMilliSec() - m_lastNonce2CleanTime) > (15 * 60 * 1000));
+
+        if (cleanWork)
+            RequestCleanNonce2();
+
+        {
+            WorkPackageSptr newWork = InstanciateWorkPackage();
+            newWork->Init(job, h256(prevHash), coinbase1, coinbase2, nTime, cleanWork, m_nonce1, m_nonce2Size, m_extraNonce, m_active->host);
+            newWork->m_extranoncePos = (U32)(coinbase1.length() + m_nonce1.length()) / 2;
+            SendWorkToMiners(newWork);
+        }
+
+        return true;
+    }
+    return false;
+}
+
+
 void StratumClientPASC::ProcessMiningNotifySolo(Json::Value& jsondata)
 {
     string retVal;
