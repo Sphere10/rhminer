@@ -633,7 +633,7 @@ void StratumClient::RequestCleanNonce2()
     m_lastNonce2CleanTime = TimeGetMilliSec();
     m_nonce2 = GetNewNonce2();
 
-    KernelOffsetManager::Reset(0);
+    KernelOffsetManager::Init(0);
 }
 
 //init a newly received wp. Called from mining.notify
@@ -652,49 +652,6 @@ void StratumClient::SendWorkToMiners(WorkPackageSptr wp)
     m_farm->SetWork(InstanciateWorkPackage(&wp));
 }
 
-bool StratumClient::ProcessMiningNotify(Json::Value& params)
-{
-    int i = 0;
-    string job = params.get((Json::Value::ArrayIndex)i++, "").asString();
-    string prevHash = params.get((Json::Value::ArrayIndex)i++, "").asString();
-    string hasTries = (params.size() == 10) ? params.get((Json::Value::ArrayIndex)i++, "").asString() : "";
-    string coinbase1 = params.get((Json::Value::ArrayIndex)i++, "").asString();
-    string coinbase2 = params.get((Json::Value::ArrayIndex)i++, "").asString();
-    Json::Value merkelArray = params.get((Json::Value::ArrayIndex)i++, 0);
-    string bbver = params.get((Json::Value::ArrayIndex)i++, "").asString();
-    string nBit = params.get((Json::Value::ArrayIndex)i++, "").asString();
-    string nTime = params.get((Json::Value::ArrayIndex)i++, "").asString();
-    bool   cleanWork = params.get((Json::Value::ArrayIndex)i++, false).asBool();
-       
-    if (prevHash.empty())
-        prevHash = "0000000000000000000000000000000000000000000000000000000000000000";
-
-    {
-        //some pool dont process authorization
-        if (!m_authorized)
-        {
-            m_authorized = true;
-        }
-
-        //regardless of cleanWork, we clean nonc2 every 15 min ! Duno what is the best value here ?
-        static U64 firstTimeCalled = TimeGetMilliSec();
-        cleanWork |= (TimeGetMilliSec()-firstTimeCalled > (15 * 60 * 1000)) &&
-                     ((TimeGetMilliSec() - m_lastNonce2CleanTime) > (15 * 60 * 1000));
-
-        if (cleanWork)
-            RequestCleanNonce2();
-
-        {
-            WorkPackageSptr newWork = InstanciateWorkPackage();
-            newWork->Init(job, h256(prevHash), coinbase1, coinbase2, nTime, cleanWork, m_nonce1, m_nonce2Size, m_extraNonce, m_active->host);
-            newWork->m_extranoncePos = (U32)(coinbase1.length() + m_nonce1.length()) / 2;
-            SendWorkToMiners(newWork);
-        }
-
-        return true;
-    }
-    return false;
-}
 
 void StratumClient::PrepareWorkInternal(WorkPackageSptr wp)
 {
@@ -775,6 +732,23 @@ void StratumClient::RespondSubscribe(Json::Value& responseObject, U64 gpuIndex)
     }
 }
 
+
+
+//set_difficulty
+void StratumClient::ProcessSetDiff(Json::Value& responseObject)
+{
+    Json::Value params = responseObject.get("params", Json::Value::null);
+    double stratDiff = params.isArray() ? params[0].asDouble() : responseObject.asDouble();
+    SetStratumDiff((float)stratDiff);
+}
+
+void StratumClient::ProcessSetDiffSolo(Json::Value& arrayParam)
+{
+    ProcessSetDiff(arrayParam);
+}
+
+
+
 void StratumClient::SetStratumDiff(float stratDiff)
 {
     if (GlobalMiningPreset::I().m_localDifficulty != 0.0f)
@@ -787,14 +761,6 @@ void StratumClient::SetStratumDiff(float stratDiff)
         if (m_nextWorkDifficulty <= 0.0000000001)
             m_nextWorkDifficulty = 0.000000001;
     }
-}
-
-//set_difficulty
-void StratumClient::ProcessSetDiff(Json::Value& responseObject)
-{
-    Json::Value params = responseObject.get("params", Json::Value::null);
-    double stratDiff = params.isArray() ? params[0].asDouble() : responseObject.asDouble();
-    SetStratumDiff((float)stratDiff);
 }
 
 
@@ -1064,6 +1030,10 @@ void StratumClient::ProcessReponse(Json::Value& responseObject)
 
             MiningNotify(responseObject);
         }
+    }
+    else if (method == "miner.update_difficulty")
+    {
+        ProcessSetDiffSolo(responseObject);
     }
     else if (method == "mining.set_difficulty")
     {

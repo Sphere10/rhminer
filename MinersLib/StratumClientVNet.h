@@ -26,6 +26,8 @@ public:
     virtual char* GetMinerSubmitRpcName() { return "miner.submit"; }
     virtual char* GetMinerNotifyRpcName() { return "miner.notify"; }
     virtual void CallSubmit(SolutionSptr solution);
+    virtual bool ProcessMiningNotify(Json::Value& params);
+    virtual void ProcessSetDiffSolo(Json::Value& responseObject);
     virtual void ProcessMiningNotifySolo(Json::Value& arrayParam);
     virtual void RespondMiningSubmitSolo(Json::Value& stratumData, U32 gpuIndex);
 

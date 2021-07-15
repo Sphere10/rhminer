@@ -64,15 +64,19 @@ void StratumClientVNet::ProcessMiningNotifySolo(Json::Value& jsondata)
 
         string targetPOWstr = params.get("TargetPOW", "").asCString();
 
+        // Uncomment this to simulate a high-diff workpackage and receive "miner.update_difficulty"
+        //targetPOWstr = "00000000000000000000000000000000000000000000000000000000010fffff";
+
         Json::Value config = params.get("Config", Json::Value::null);
-        string extraNonceSpot;
-        string nonceSpot;
         string nTime;
         U32 timeStamp = 0;
-        U32 minerNonce = 0;
+        U32 timeStampPos = 0;
+        string workID;
         U32 minerTagPos = 0;
-        U32 extraNoncePos = 0;
+        U32 startNonce = 0;
         U32 noncePos = 0;
+        U32 microBlockNumnerPos = 0;
+        U16 microBlockNumner = 0;
         U32 minerTagSize = 64;
         strings blockTemplate;
         string blockTemplateStr;
@@ -83,23 +87,28 @@ void StratumClientVNet::ProcessMiningNotifySolo(Json::Value& jsondata)
             minerTagSize = (U32)config.get("tagsize", 0).asUInt();
             if (ToUpper(config.get("hashalgo", "").asCString()) != "RH2")
             {
-                PrintOutCritical("Unsupported algo\n");
-                return;
+                PrintOutCritical("Unsupported algo\n");  
+                return; 
             }
-
+            /*
             blockTemplateStr = config.get("blocktemplate", "").asCString();
             blockTemplate = GetTokens(blockTemplateStr, ",");
             if (blockTemplate.size() == 0)
                 RHMINER_EXIT_APP("Wrong block template\n");
+            */
         }
 
-        if (blockTemplateStr.length() == 0)
-            RHMINER_EXIT_APP("Error. Deamon/Wallet miner name sent badly constructed work package.");
+        //if (blockTemplateStr.length() == 0)
+        //    RHMINER_EXIT_APP("Error. Deamon/Wallet miner name sent badly constructed work package.");
 
         string header;
         auto ProcessUintField = [&](U32 val) { U32 v = val; return toHex((void*)&v, 4, false); };
+        auto ProcessUint16Field = [&](U32 val) { U16 v = (U16)val; return toHex((void*)&v, 2, false); };
+        auto ProcessUint64Field = [&](U64 val) { U64 v = val; return toHex((void*)&v, 8, false); };
         auto ProcessStringField = [&](string val) { return toHex((void*)val.c_str(), val.length(), false); };
-        auto IsHexArray  = [&](string fieldname) { return (fieldname == "MerkelRoot" || fieldname == "PreviousBlockHash")  ? true: false; };
+        //auto IsHexArray  = [&](string fieldname) { return (fieldname == "PrevMinerElectionHeader" || fieldname == "BlockPolicy" || fieldname == "KernelID" || fieldname == "Signature") ? true : false; };
+        //auto Is64Bits = [&](string fieldname) { return fieldname.find("Account") != std::string::npos ? true : false; };
+        
         auto AddMinerTagFilling = [&](string minerTag) {
             U32 tagSize = (U32)minerTag.length();
             if (tagSize > minerTagSize)
@@ -108,54 +117,53 @@ void StratumClientVNet::ProcessMiningNotifySolo(Json::Value& jsondata)
                 return string("");
             }
             if (tagSize == minerTagSize)
-                return string("");
+                return minerTag;
     
             U32 remainingSize = minerTagSize - tagSize;
-            string filler = g_extraPayload;
-            if (filler.length() >= remainingSize)
-                filler = filler.substr(0, remainingSize);
-            else
-            {
-                if (filler.length() < remainingSize - 7)
-                {
-                    filler += MakeSpaces(remainingSize -7 - filler.length());
-                    filler += "rhminer";
-                }
-                else
-                    filler += MakeSpaces(remainingSize - filler.length());
-            }
-            RHMINER_ASSERT(filler.length() == remainingSize);
+            string filler = minerTag;
+            filler += MakeSpaces(remainingSize);
+            RHMINER_ASSERT(filler.length() == minerTagSize);
 
             return filler;
         };
 
-        /*        
-        finalized version
-        header = ProcessUintField(config.get("Version", 0).asUInt());
-        header += ProcessUintField(config.get("BlockNumber", 0).asUInt());
-        header += ProcessStringField(config.get("MerkelRoot", "").asString());
-        minerNonce = config.get("MinerNonce", 0).asUInt();
-        header += ProcessUintField(minerNonce);
-        header += ProcessUintField(config.get("VotingBitMask", 0).asUInt());
-        header += ProcessUintField(config.get("ExtraNonce", 0).asUInt());
-        extraNoncePos = header.length() / 2;
-        //Json saved it as 32bit, make it 64b
-        header += ProcessUintField(0xAAAAAAAA);
-        header += ProcessMinerTag(config.get("MinerTag", "").asString());
-        header += ProcessStringField(config.get("PreviousBlockHash", "").asString());
-        header += ProcessUintField(config.get("Timestamp", 0).asUInt());
-        nTime = toHex((U32)config.get("Timestamp", 0).asUInt());
-        header += ProcessUintField(config.get("NodeNonce", 0).asUInt());
-        noncePos = header.length() / 2;
-        header += ProcessUintField(0xBBBBBBBB);
-        */
         header.reserve(1024);
-        PrintOutSilent("Mining block template : %s\n", blockTemplateStr.c_str());
+        header += ProcessUintField(params.get("Version", 0).asUInt());
+        header += params.get("PrevMinerElectionHeader", "").asString();
+        microBlockNumner = (U16)params.get("PreviousMinerMicroBlockNumber", 0).asUInt();
+        header += ProcessUint16Field(microBlockNumner);
+        microBlockNumnerPos = (header.length() / 2)-2;
+        header += ProcessUintField(params.get("CompactTarget", 0).asUInt());
+        U32 paddingSize = (U32)params.get("PADDING", 0).asUInt();
+        header += MakeSpaces(paddingSize * 2, '0');
+        header += params.get("BlockPolicy", "").asString();
+        header += params.get("KernelID", "").asString();
+        header += ProcessUint64Field(params.get("MinerRewardAccount", 0).asUInt64()); 
+        header += ProcessUint64Field(params.get("DevRewardAccount", 0).asUInt64()); 
+        header += ProcessUint64Field(params.get("InfrastructureRewardAccount", 0).asUInt64());
+        header += params.get("Signature", "").asString(); 
+        string fullTag = AddMinerTagFilling(params.get("MinerTag", "").asString());
+        header += ProcessStringField(fullTag);
+        minerTagPos = (header.length() / 2) - minerTagSize;
+        timeStamp = params.get("TimeStamp", 0).asUInt();
+        header += ProcessUintField(timeStamp);
+        timeStampPos = (header.length() / 2) - 4;
+        startNonce = params.get("Nonce", 0).asUInt();
+        header += ProcessUintField(startNonce);
+        noncePos = (header.length() / 2) - 4;
+
+        workID = params.get("WorkID", "0").asString();
+        nTime = toHex((U32)timeStamp);
+
+        /*
+        //PrintOutSilent("Mining block template : %s\n", blockTemplateStr.c_str());
         for (auto const& fieldName : blockTemplate)
         {
             Json::Value fieldVal = params.get(fieldName, Json::Value::null);
             if (IsHexArray(fieldName))
                 header += fieldVal.asString();
+            else if (Is64Bits(fieldName))
+                header += ProcessUint64Field(fieldVal.asUInt64());
             else if (fieldVal.isUInt())
                 header += ProcessUintField(fieldVal.asUInt());
             else if (fieldVal.isString())
@@ -166,8 +174,8 @@ void StratumClientVNet::ProcessMiningNotifySolo(Json::Value& jsondata)
                 return;
             }
 
-            if (fieldName == "MinerNonce")
-                minerNonce = (U32)params.get(fieldName, 0).asUInt();
+            if (fieldName == "WorkID")
+                workID = params.get(fieldName, "0").asString();
 
             if (fieldName == "MinerTag")
             {
@@ -183,6 +191,12 @@ void StratumClientVNet::ProcessMiningNotifySolo(Json::Value& jsondata)
                 header += ProcessUintField(0xAAAAAAAA);
             }
 
+            if (fieldName == "PADDING")
+            {
+                U32 paddingSize = (U32)params.get(fieldName, 0).asUInt();
+                header += MakeSpaces(paddingSize*2, '0');
+            }
+
             if (fieldName == "Nonce")
                 noncePos = (header.length() / 2)-4;
 
@@ -192,8 +206,8 @@ void StratumClientVNet::ProcessMiningNotifySolo(Json::Value& jsondata)
                 timeStamp = params.get("Timestamp", 0).asUInt();
                 nTime = toHex((U32)timeStamp);
             }
-
         }
+*/
 
         //TODO: Get ridd of targetPOW in MinerBlockSurogate and calc POW from compactTarget, HERE,  using MonilaTarget algo in c++
         h256 targetPow;
@@ -215,20 +229,22 @@ void StratumClientVNet::ProcessMiningNotifySolo(Json::Value& jsondata)
 
         //send work to miners
         WorkPackageSptr newWork = InstanciateWorkPackage();
-        newWork->m_extranoncePos = extraNoncePos;
+        newWork->m_extranoncePos = 0; //DISABLED
         newWork->m_noncePos = noncePos;
+        newWork->as<VNetWorkPackage>()->m_microBlockPos = microBlockNumnerPos;
+        newWork->as<VNetWorkPackage>()->m_microBlockNumber = microBlockNumner;
         newWork->as<VNetWorkPackage>()->m_minerTagPos = minerTagPos;
         newWork->as<VNetWorkPackage>()->m_minerTagSize = minerTagSize;
-        newWork->as<VNetWorkPackage>()->m_minerNonce = minerNonce;
+        newWork->as<VNetWorkPackage>()->m_timeStampPos = timeStampPos;
         newWork->as<VNetWorkPackage>()->m_timeStamp = timeStamp;
 
-        if ((header.size() / 2) > MaxMiningHeaderSize)
+        if ((header.size() / 2) != MaxMiningHeaderSize)
         {
-            RHMINER_EXIT_APP("Error: Header size to big.\n");
+            RHMINER_EXIT_APP("Error: Wrong Header size.\n");
         }
 
         //Cram all in coinbase1 (as a hack)
-        newWork->Init(toHex(++m_soloJobId), h256("0000000000000000000000000000000000000000000000000000000000000000"), header, "", nTime, false, m_nonce1, m_nonce2Size, m_extraNonce, m_active->host);
+        newWork->Init(workID, h256("0000000000000000000000000000000000000000000000000000000000000000"), header, "", nTime, false, m_nonce1, m_nonce2Size, startNonce, m_active->host);
         newWork->m_soloTargetPow = soloTargetPow;
         SendWorkToMiners(newWork);
     }
@@ -240,6 +256,50 @@ void StratumClientVNet::ProcessMiningNotifySolo(Json::Value& jsondata)
     {
         PrintOutCritical("exception\n");
     }
+}
+
+
+bool StratumClientVNet::ProcessMiningNotify(Json::Value& params)
+{
+    PrintOutCritical("Not implemented yet...\n");
+    int i = 0;
+    string job = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string prevHash = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string hasTries = (params.size() == 10) ? params.get((Json::Value::ArrayIndex)i++, "").asString() : "";
+    string coinbase1 = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string coinbase2 = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    Json::Value merkelArray = params.get((Json::Value::ArrayIndex)i++, 0);
+    string bbver = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string nBit = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    string nTime = params.get((Json::Value::ArrayIndex)i++, "").asString();
+    bool   cleanWork = params.get((Json::Value::ArrayIndex)i++, false).asBool();
+
+    if (prevHash.empty())
+        prevHash = "0000000000000000000000000000000000000000000000000000000000000000";
+
+    {
+        //some pool dont process authorization
+        if (!m_authorized)
+            m_authorized = true;
+
+        //regardless of cleanWork, we clean nonc2 every 15 min ! Duno what is the best value here ?
+        static U64 firstTimeCalled = TimeGetMilliSec();
+        cleanWork |= (TimeGetMilliSec() - firstTimeCalled > (15 * 60 * 1000)) &&
+            ((TimeGetMilliSec() - m_lastNonce2CleanTime) > (15 * 60 * 1000));
+
+        if (cleanWork)
+            RequestCleanNonce2();
+
+        {
+            WorkPackageSptr newWork = InstanciateWorkPackage();
+            newWork->Init(job, h256(prevHash), coinbase1, coinbase2, nTime, cleanWork, m_nonce1, m_nonce2Size, m_extraNonce, m_active->host);
+            newWork->m_extranoncePos = 0;
+            SendWorkToMiners(newWork);
+        }
+
+        return true;
+    }
+    return false;
 }
 
 //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
@@ -314,23 +374,21 @@ void StratumClientVNet::CallSubmit(SolutionSptr solution)
 
     if (IsSoloMining())
     {
-
         bytes minerTag;
         minerTag.resize(cbwp->m_minerTagSize);
         memcpy(&minerTag[0], &solution->m_work->m_fullHeader[0] + cbwp->m_minerTagPos, cbwp->m_minerTagSize);
-        
+
         auto deviceName = GpuManager::Gpus[solution->m_gpuIndex].gpuName.c_str();
 
         //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
         //PrintOut("Submiting solution %u at %u\n", currentNonce, cbwp->m_timeStamp);
-        PrintOut("Submiting solution %u in %2.4f seconds, at %.12u, with diff %s (dt submit %3.4f)\n", currentNonce, (TimeGetMilliSec() - cbwp->m_initTimeMS)/1000.0, cbwp->m_timeStamp, DiffToStr((float)cbwp->m_workDiff), (TimeGetMilliSec() - _lastAcceptedSubmitTime)/1000.0f);
+        PrintOut("Submiting solution %u in %2.4f seconds, at %.12u, with diff %s (dt submit %3.4f) for micro block %d\n", currentNonce, (TimeGetMilliSec() - cbwp->m_initTimeMS)/1000.0, cbwp->m_timeStamp, DiffToStr((float)cbwp->m_workDiff), (TimeGetMilliSec() - _lastAcceptedSubmitTime)/1000.0f, int(cbwp->m_microBlockNumber));
         //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
 
-        params = FormatString("{\"MinerNonce\":%u, \"MinerTag\":\"%s\",\"Time\":%u,\"ExtraNonce\":%llu,\"Nonce\":%u}",
-            cbwp->m_minerNonce,
+        params = FormatString("{\"WorkID\":%s, \"MinerTag\":\"%s\",\"Time\":%u,\"Nonce\":%u}",
+            cbwp->m_jobID.c_str(),
             toHex((void*)&minerTag[0], minerTag.size()).c_str(),
             cbwp->m_timeStamp,
-            cbwp->m_nonce2_64,
             currentNonce);
 
         CallJsonMethod("miner.submit", params, solution->m_gpuIndex);
@@ -355,3 +413,39 @@ void StratumClientVNet::CallSubmit(SolutionSptr solution)
         CallJsonMethod("mining.submit", params, solution->m_gpuIndex);
     }
 }
+
+//set_difficulty
+void StratumClientVNet::ProcessSetDiffSolo(Json::Value& responseObject)
+{
+    Json::Value arayparams = responseObject.get("params", Json::Value::null);
+    Json::Value params = arayparams.get((Json::Value::ArrayIndex)0, 0);
+    string targetPOWstr = params.get("TargetPOW", "").asCString();
+    U32 newMicroBlockNumber = params.get("MicroBlockNumber", "").asUInt();
+    U32 timeStamp = params.get("TimeStamp", "").asUInt();
+    
+    h256 targetPow;
+    h256 soloTargetPow;
+    h256 normBoud = h256(fromHex(targetPOWstr));
+    swab256((void*)targetPow.data(), normBoud.data());
+    soloTargetPow = targetPow;
+        
+    //NOTE SURE we need this...
+    double d64, dcut64;
+    d64 = 1.0f * truediffone;
+    dcut64 = le256todouble(targetPow.data());
+    if (!dcut64)
+        dcut64 = 1;
+    float newDiff = (float)(d64 / dcut64);
+    SetStratumDiff(newDiff);
+    
+    //m_current->m_localyGenerated = true;
+    m_current->m_soloTargetPow = soloTargetPow;
+    m_current->as<VNetWorkPackage>()->m_microBlockPos;
+    m_current->as<VNetWorkPackage>()->m_timeStamp = timeStamp;
+    m_current->m_ntime = toHex((U32)timeStamp);
+    m_current->as<VNetWorkPackage>()->m_microBlockNumber = newMicroBlockNumber;
+    SendWorkToMiners(m_current);
+
+}
+
+

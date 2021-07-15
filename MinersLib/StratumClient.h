@@ -131,8 +131,9 @@ protected:
     //Stratum protocol
     virtual void OnPostConnect();
     virtual void RequestCleanNonce2();
-    virtual bool ProcessMiningNotify(Json::Value& arrayParam);
+    virtual bool ProcessMiningNotify(Json::Value& arrayParam) = 0;
     virtual void ProcessSetDiff(Json::Value& responseObject);
+    virtual void ProcessSetDiffSolo(Json::Value& arrayParam);
     virtual void WriteGenericAnwser(const string& line, U32 workID);
     virtual void ProcessExtranonce(Json::Value& responseObject);
 
@@ -151,7 +152,7 @@ protected:
     virtual U32             GetDefaultNonce2Size() { return 4; }
     virtual void            CallJsonMethod(string methodName, string params, U64 gpuIndexOrRigID = 0, string additionalCallParams = "", bool dontPutID = false);
     void                    MiningNotify(Json::Value& responseObject);
-    void                    SetStratumDiff(float stratDiff);
+    virtual void            SetStratumDiff(float stratDiff);
 
 protected:
 	ServerCredential*   m_active;
