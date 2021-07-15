@@ -117,9 +117,12 @@ public:
     virtual void    UpdateHeader();
     virtual U64	    ComputeNonce2(U32 nonce2);
 
-    U32             m_minerNonce = 0;
+    //U32             m_minerNonce = 0;
+    U32             m_microBlockPos = 0;
+    U16             m_microBlockNumber = 0;
     U32             m_minerTagPos = 0;
     U32             m_minerTagSize = 0;
+    U32             m_timeStampPos = 0;
     U32             m_timeStamp = 0;
 };
 

@@ -332,15 +332,21 @@ void VNetWorkPackage::UpdateHeader()
 {
     m_nonce2_64 = ComputeNonce2(m_nonce2);
     RHMINER_ASSERT(m_noncePos != 0);
-    RHMINER_ASSERT(m_extranoncePos!= 0);
 
     m_fullHeader = fromHex(m_coinbase1, WhenError::Throw);
-
-    DebugOut("Extra nonce %llx\n", m_nonce2_64);
+    
 
     U8* head = static_cast<U8*>(m_fullHeader.data());
-    reinterpret_cast<U64*>(head + m_extranoncePos)[0] = m_nonce2_64;
-    //static_cast<U32*>(head + m_noncePos-4)[0] = RH_swap_u32(*(U32*)ntime.data());
+    //RHMINER_ASSERT(m_extranoncePos != 0);
+    //DebugOut("Extra nonce %llx\n", m_nonce2_64);
+    //reinterpret_cast<U64*>(head + m_extranoncePos)[0] = m_nonce2_64;
+
+    //update timestamp
+    reinterpret_cast<U32*>(head + m_timeStampPos)[0] = m_timeStamp;
+
+    //Update microblock number
+    reinterpret_cast<U16*>(head + m_microBlockPos)[0] = m_microBlockNumber;
+
+    //simple marker
     reinterpret_cast<U32*>(head + m_noncePos)[0] = 1;
-    
 }
