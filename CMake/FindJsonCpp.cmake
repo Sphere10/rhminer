@@ -1,4 +1,4 @@
-find_path(JsonCpp_INCLUDE_DIR "json/json.h"
+find_path(JsonCpp_INCLUDE_DIR "json/json.h" "jsoncpp/json/json.h"
   PATH_SUFFIXES "include"
   DOC "Specify the JsonCpp include directory here")
 

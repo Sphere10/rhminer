@@ -24,7 +24,8 @@
 //#define RH2_ENABLE_TRANSFO0_MMX128 //slower
 #if !defined(_WIN32_WINNT)
     #define RH2_ENABLE_MERSSEN_12_SSE4
-    #define RH2_ENABLE_MERSSEN_INTERLEAVE
+    //Temporarely disabled - TODO: fix that and optimize on linux
+    //#define RH2_ENABLE_MERSSEN_INTERLEAVE
     //#define RH2_ENABLE_EXPAND_MERSSEN_USING_FAST4 
     #define RH2_ENABLE_EXPAND_MERSSEN_INPLACE
 #else

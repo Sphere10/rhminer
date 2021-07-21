@@ -281,7 +281,7 @@ void MiniWeb_Connection(socket_ptr sock)
                             {
                                 function.erase(function.begin());
                                 auto c = std::find(function.rbegin(), function.rend(), '\'');
-                                function.erase((c+1)._Get_current(), function.end());
+                                function.erase((c+1).base(), function.end());
                             }
                             Json::Reader reader;
                             validJson = reader.parse(function, responseObject);

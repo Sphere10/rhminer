@@ -37,7 +37,7 @@
 #include <boost/asio.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim_all.hpp>
-#include <boost/timer.hpp>
+//#include <boost/timer.hpp>
 #include <boost/bind.hpp>
 #include <boost/optional.hpp>
 

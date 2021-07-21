@@ -378,11 +378,13 @@ void StratumClientVNet::CallSubmit(SolutionSptr solution)
         minerTag.resize(cbwp->m_minerTagSize);
         memcpy(&minerTag[0], &solution->m_work->m_fullHeader[0] + cbwp->m_minerTagPos, cbwp->m_minerTagSize);
 
+        DebugOut(">> Header %s\n", toHex(&solution->m_work->m_fullHeader[0], 256, false).c_str());
+        
         auto deviceName = GpuManager::Gpus[solution->m_gpuIndex].gpuName.c_str();
 
         //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
         //PrintOut("Submiting solution %u at %u\n", currentNonce, cbwp->m_timeStamp);
-        PrintOut("Submiting solution %u in %2.4f seconds, at %.12u, with diff %s (dt submit %3.4f) for micro block %d\n", currentNonce, (TimeGetMilliSec() - cbwp->m_initTimeMS)/1000.0, cbwp->m_timeStamp, DiffToStr((float)cbwp->m_workDiff), (TimeGetMilliSec() - _lastAcceptedSubmitTime)/1000.0f, int(cbwp->m_microBlockNumber));
+        PrintOut("Submiting solution %u (id %s) in %2.4f seconds, at %.12u, with diff %s (dt submit %3.4f) for micro block %d\n", currentNonce, cbwp->m_jobID.c_str(), (TimeGetMilliSec() - cbwp->m_initTimeMS)/1000.0, cbwp->m_timeStamp, DiffToStr((float)cbwp->m_workDiff), (TimeGetMilliSec() - _lastAcceptedSubmitTime)/1000.0f, int(cbwp->m_microBlockNumber));
         //TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP TEMP 
 
         params = FormatString("{\"WorkID\":%s, \"MinerTag\":\"%s\",\"Time\":%u,\"Nonce\":%u}",
@@ -437,13 +439,15 @@ void StratumClientVNet::ProcessSetDiffSolo(Json::Value& responseObject)
         dcut64 = 1;
     float newDiff = (float)(d64 / dcut64);
     SetStratumDiff(newDiff);
+    PrintOut("Updating header\n");
     
     //m_current->m_localyGenerated = true;
+    m_current->m_initTimeMS = TimeGetMilliSec();
     m_current->m_soloTargetPow = soloTargetPow;
     m_current->as<VNetWorkPackage>()->m_microBlockPos;
     m_current->as<VNetWorkPackage>()->m_timeStamp = timeStamp;
     m_current->m_ntime = toHex((U32)timeStamp);
-    m_current->as<VNetWorkPackage>()->m_microBlockNumber = newMicroBlockNumber;
+    m_current->as<VNetWorkPackage>()->m_microBlockNumber = newMicroBlockNumber;    
     SendWorkToMiners(m_current);
 
 }

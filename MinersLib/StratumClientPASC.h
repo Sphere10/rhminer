@@ -23,8 +23,8 @@ class StratumClientPASC : public StratumClient
 public:
     StratumClientPASC(const StratumInit& initData) :StratumClient(initData) {}
 
-    virtual char* GetMinerSubmitRpcName() { return "miner-submit"; }
-    virtual char* GetMinerNotifyRpcName() { return "miner-notify"; }
+    virtual const char* GetMinerSubmitRpcName() { return "miner-submit"; }
+    virtual const char* GetMinerNotifyRpcName() { return "miner-notify"; }
     virtual bool ProcessMiningNotify(Json::Value& arrayParam);
     virtual void CallSubmit(SolutionSptr solution);
     virtual void ProcessMiningNotifySolo(Json::Value& arrayParam);

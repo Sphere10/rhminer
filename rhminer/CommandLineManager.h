@@ -19,7 +19,12 @@
 #pragma once
 
 #include "corelib/utils.h"
-#include <json/reader.h>
+#if !defined(_WIN32) && !defined(IS_MAC_OS_X)
+    //If you get "Fatal error: json/reader.h: No such file or directory" on linux, just remove change the include here to #include <json/reader.h>
+    #include <jsoncpp/json/reader.h>
+#else
+    #include <json/reader.h>
+#endif
 using namespace std;
 
 //define a global var as {VAR_NAME} that is registered in the command line manager from pre-main scope

@@ -335,7 +335,7 @@ void VNetWorkPackage::UpdateHeader()
 
     m_fullHeader = fromHex(m_coinbase1, WhenError::Throw);
     
-
+ 
     U8* head = static_cast<U8*>(m_fullHeader.data());
     //RHMINER_ASSERT(m_extranoncePos != 0);
     //DebugOut("Extra nonce %llx\n", m_nonce2_64);

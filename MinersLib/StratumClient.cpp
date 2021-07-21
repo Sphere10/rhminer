@@ -646,7 +646,8 @@ void StratumClient::SendWorkToMiners(WorkPackageSptr wp)
     string ids = wp->m_jobID;
     U64 ts = ToUIntX(wp->m_ntime);    
 
-    PrintOutCritical("Received new Work %s. Difficulty is %s\n", ids.c_str(), DiffToStr((float)wp->m_workDiff));
+    //PrintOutCritical("Received new Work %s. Difficulty is %s\n", ids.c_str(), DiffToStr((float)wp->m_workDiff));
+    PrintOutCritical("Received new Work %s. Difficulty is %s at %d\n", ids.c_str(), DiffToStr((float)wp->m_workDiff), (U32)ToIntX(wp->m_ntime));
 
     //Propagate the workpackage to all miners
     m_farm->SetWork(InstanciateWorkPackage(&wp));

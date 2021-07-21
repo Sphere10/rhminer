@@ -245,8 +245,8 @@ protected:
     U32         m_soloJobId = 0;
 
     //Solo interface
-    virtual char* GetMinerSubmitRpcName() = 0;
-    virtual char* GetMinerNotifyRpcName() = 0;
+    virtual const char* GetMinerSubmitRpcName() = 0;
+    virtual const char* GetMinerNotifyRpcName() = 0;
     virtual void ProcessMiningNotifySolo(Json::Value& arrayParam) = 0;
     virtual void CallSubmit(SolutionSptr solution) = 0;
     virtual void RespondMiningSubmitSolo(Json::Value& stratumData, U32 gpuIndex) = 0;

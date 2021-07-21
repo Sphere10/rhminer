@@ -606,6 +606,7 @@ inline uint32_t merssen_twister_rand_fast_partial_SSE4(mersenne_twister_state* s
 }
 #endif //0
 
+
 #define merssen_twister_rand_fast_partial_12(S) merssen_twister_rand_fast_partial_12_SSE4(S)
 
 inline uint32_t merssen_twister_rand_fast_partial_12_SSE4(mersenne_twister_state* state)

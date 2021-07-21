@@ -671,7 +671,10 @@ U32 GpuManager::GetAllGpuThreadsCount(U32& enabledGpuCount)
 #if defined(__GNUC__)
 void __cpuidex(int cpuid[4], int func_id, int subfunc_id)
 {
-    memset(cpuid, 0, sizeof(cpuid));
+    cpuid[0] = 0;
+    cpuid[1] = 0;
+    cpuid[2] = 0;
+    cpuid[3] = 0;
 #if !defined(IS_MAC_OS_X)
     asm volatile ("cpuid"
         : "=a" (cpuid[0]), "=b" (cpuid[1]), "=c" (cpuid[2]), "=d" (cpuid[3])

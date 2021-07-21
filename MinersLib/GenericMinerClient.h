@@ -26,7 +26,7 @@ RHMINER_COMMAND_LINE_DECLARE_GLOBAL_INT("displayspeedtimeout", g_DisplaySpeedTim
 class BaseMinerClient: public Worker
 {
 public:
-    BaseMinerClient(const char* threadName, string coin) :m_miningCoin(coin), Worker(threadName){}
+    BaseMinerClient(const char* threadName, string coin) : Worker(threadName), m_miningCoin(coin) {}
     virtual ~BaseMinerClient() {};
     bool IsRunning() {return m_running;}
 

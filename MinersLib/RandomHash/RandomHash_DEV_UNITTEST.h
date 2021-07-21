@@ -510,6 +510,7 @@ void TestRandomHash2Cache()
 
 void TestSHA_Intrinsic()
 {
+    /*
     bytes input_ORI = fromHex("4f550200ca022000bb718b4b00d6f74478c332f5fb310507e55a9ef9b38551f63858e3f7c86dbd00200006f69afae8a6b0735b6acfcc58b7865fc8418897c530211f19140c9f95f24532102700000000000003000300a297fd17506f6c796d696e65722e506f6c796d696e65722e506f6c796d6939303030303030302184d63666eb166619e925cef2a306549bbc4d6f4da3bdf28b4393d5c1856f0ee3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855000000006d68295b00000000");
     bytes input;
     input.resize(input_ORI.size());
@@ -536,9 +537,8 @@ void TestSHA_Intrinsic()
         DebugOut("Normal RandomHash_SHA2_224 %s \n",toHex((void*)RH_STRIDE_GET_DATA(out_stride), RH_STRIDE_GET_SIZE(out_stride)).c_str());
         RandomHash_SHA2_256(in_stride, out_stride, false);
         DebugOut("Normal RandomHash_SHA2_256 %s \n", toHex((void*)RH_STRIDE_GET_DATA(out_stride), RH_STRIDE_GET_SIZE(out_stride)).c_str());
-
-        #pragma message("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Code and Put sha intrinsic here !")
     }
+    */
 }
 
 void TestRandomHash2()
@@ -2095,8 +2095,10 @@ void TestTrx0()
 void RunUnitTests(U32 coinID)
 {   
     extern string g_selectedMiningCoin;
-    if (g_selectedMiningCoin == RH_COIN_NAME_PASC)
+    
+    //if (g_selectedMiningCoin == RH_COIN_NAME_PASC)
     {
+        g_selectedMiningCoin = RH_COIN_NAME_PASC;
         PrintOut("Running basic Unit Tests for PASC\n");
         TestSHA_Intrinsic();
         Test_merssen_twister_rand();
@@ -2108,8 +2110,9 @@ void RunUnitTests(U32 coinID)
         TestScrambling();
     }
 
-    if (g_selectedMiningCoin == RH_COIN_NAME_VNET)
+    //if (g_selectedMiningCoin == RH_COIN_NAME_VNET)
     {
+        g_selectedMiningCoin = RH_COIN_NAME_VNET;
         PrintOut("Running basic Unit Tests for VNET\n");
     }
     

@@ -59,17 +59,52 @@ Note2: It is not recommended to mine using a laptop.
 4.  Run with proper arguments
 
 ## Build Linux (Ubuntu)
-sudo apt-get install git build-essential cmake  <br>
-Install and compile boost_1_72_0 <br>
-Install jsoncpp <br>
-git clone https://github.com/polyminer1/rhminer.git <br>
-cd rhminer <br>
-mkdir build <br>
-cd build <br>
-*To build for CUDA Pascal :* cmake -DRH_CPU_ONLY=OFF -DRH_DEBUG_TARGET=OFF -DRH_CUDA_ARCH=Pascal --target all ..  <br>
-*To build for CPU only    :* cmake -DRH_CPU_ONLY=ON -DRH_DEBUG_TARGET=OFF --target all ..  <br>
-make all <br>
+1.  Install CMake if you dont have it already:
+    sudo apt-get update
+    sudo apt-get install build-essential libssl-dev
+    wget https://github.com/Kitware/CMake/releases/download/v3.20.0/cmake-3.20.0.tar.gz
+    tar -zxvf cmake-3.20.0.tar.gz
+    cd cmake-3.20.0
+    ./bootstrap
+    make
+    sudo make install
+2.  Install jsoncpp : 
+    sudo apt-get install libjsoncpp-dev
+3.  Install BOOST:
+    sudo apt-get update
+    sudo apt-get install build-essential g++ python-dev autotools-dev libicu-dev build-essential libbz2-dev libboost-all-dev
+    wget -O boost_1_72_0.tar.gz https://sourceforge.net/projects/boost/files/boost/1.72.0/boost_1_72_0.tar.gz/download
+    tar xzvf boost_1_72_0.tar.gz
+    cd boost_1_72_0/
+	./bootstrap.sh --prefix=/usr/
+	./b2
+	sudo ./b2 install
+4.  Build rhminer:
+    cd "to rhminer folder"
+    mkdir build
+    cd build
+    cmake ..
+    make
 
+## Build MacOS
+1.  Assuming you have Xcode with "command line tools" installed
+    Assuming you have Brew installed
+3.  install wget : 
+    brew install wget
+3.  install jsoncpp : 
+    brew install wget
+4.  install boost
+    wget -O boost_1_72_0.tar.gz https://sourceforge.net/projects/boost/files/boost/1.72.0/boost_1_72_0.tar.gz/download
+    tar xzvf boost_1_72_0.tar.gz
+    cd boost_1_72_0/
+	./bootstrap.sh --prefix=/usr/local/boost-1.72.0
+	sudo ./b2 cxxflags=-std=c++17 install
+5.  Build rhminer:
+    cd "to rhminer folder"
+    mkdir build
+    cd build
+    cmake -DRH_NO_SIMD=ON ..
+    make
 
 ## ScreenSaver
 To download the screensaver go to release section here https://github.com/polyminer1/rhminer/releases and download **VNetCoinScreenSaver.zip** or **PascalCoinScreenSaver.zip** <br>

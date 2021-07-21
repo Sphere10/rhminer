@@ -23,8 +23,8 @@ class StratumClientVNet : public StratumClient
 public:
     StratumClientVNet(const StratumInit& initData) :StratumClient(initData) {}
 
-    virtual char* GetMinerSubmitRpcName() { return "miner.submit"; }
-    virtual char* GetMinerNotifyRpcName() { return "miner.notify"; }
+    virtual const char* GetMinerSubmitRpcName() { return "miner.submit"; }
+    virtual const char* GetMinerNotifyRpcName() { return "miner.notify"; }
     virtual void CallSubmit(SolutionSptr solution);
     virtual bool ProcessMiningNotify(Json::Value& params);
     virtual void ProcessSetDiffSolo(Json::Value& responseObject);

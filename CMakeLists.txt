@@ -1,25 +1,20 @@
 cmake_minimum_required(VERSION 3.0)
 
-option(RH_DEBUG_TARGET "Compile in Debug" OFF)
 option(RH_CPU_ONLY "Compile only cpu code" ON)
 option(RH_ARCH "Architecture name" Maxwell)
 option(RH_NO_SSE4 "Disable sse4 optimizations" OFF)
 option(RH_NO_SIMD "Disable entire simd set" OFF)
-
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-    add_definitions(-DRH_CPU_ONLY)
-else("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-    set(RH_DEBUG_TARGET ON)
-endif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-
+option(RH_UNITTESTS "Compile in Debug" OFF)
 
 project(rhminer)
 set(RH_ARCH CPU)
 
-#Mac M1 hack
-set(RH_NO_SIMD ON)
+#Set this to OFF on Mac with AppleSilicon
+#set(RH_NO_SIMD ON)
 
 set(CMAKE_CXX_STANDARD 11)
+add_definitions(-DRH_CPU_ONLY)
+
 
 if(RH_NO_SIMD)
     message("No SIMD, probably using Neon")
@@ -31,17 +26,17 @@ unset(RH_NO_SIMD CACHE)
 if(RH_NO_SSE4)
 	message(STATUS "Disabling SSe4 intrinsics")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
-    if(RH_NO_SIMD EQUAL OFF)
+    if(NOT RH_NO_SIMD)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mssse3")
-    endif(RH_NO_SIMD EQUAL OFF)
+    endif(NOT RH_NO_SIMD)
 	set(RH_ARCH CPU_OLDGEN)
 	add_definitions(-DRHMINER_NO_SSE4)
 else(RH_NO_SSE4)
-	message(STATUS "ENABLING SSe4 intrinsics")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
-    if(RH_NO_SIMD EQUAL OFF)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.1")
-    endif(RH_NO_SIMD EQUAL OFF)
+    if(NOT RH_NO_SIMD)
+        message(STATUS "ENABLING SSe4 intrinsics")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.1 -msse3")
+    endif(NOT RH_NO_SIMD)
 endif(RH_NO_SSE4)
 unset(RH_NO_SSE4 CACHE) 
 
@@ -70,17 +65,18 @@ endif(RH_CPU_ONLY)
 add_definitions(-DRH_ARCH=${RH_ARCH})
 add_definitions(-DBOOST_BIND_GLOBAL_PLACEHOLDERS)
 
-if(RH_DEBUG_TARGET)
+if(RH_UNITTESTS)
 	message(STATUS "Building ${PROJECT_NAME} in DEBUG")
 	add_definitions( -Wall -fexceptions -Wfatal-errors -Wno-sign-compare -Wno-deprecated-declarations -Wno-unused-variable)
 	add_definitions(-D_DEBUG)
 	set(CMAKE_BUILD_TYPE Debug)
-else(RH_DEBUG_TARGET)
+else(RH_UNITTESTS)
 	message(STATUS "Building ${PROJECT_NAME} for ${RH_ARCH} architecture in Release")
     add_definitions( -Wall -Ofast -fomit-frame-pointer -fexceptions -Wfatal-errors -Wno-sign-compare -Wno-deprecated-declarations -Wno-unused-variable)
 	set(CMAKE_BUILD_TYPE Release)
 	add_definitions(-DNDEBUG)
-endif(RH_DEBUG_TARGET)
+endif(RH_UNITTESTS)
+unset(RH_UNITTESTS CACHE) 
 
 
 set(HEADERS
@@ -93,7 +89,7 @@ set(HEADERS
     corelib/FixedHash.h
     corelib/Guards.h
     corelib/Log.h
-    corelib/PascalWork.h
+    corelib/WorkPackage.h
     corelib/utils.h
     corelib/vector_ref.h
     corelib/Worker.h
@@ -123,7 +119,7 @@ set(HEADERS
     MinersLib/Algo/sph_sha1.h
     MinersLib/Algo/sph_sha2.h  
     MinersLib/Algo/sph_types.h
-    MinersLib/RandomHash/PascalCommon.h
+    MinersLib/RandomHash/Common.h
     MinersLib/RandomHash/RandomHash.h
     MinersLib/RandomHash/RandomHashCLMiner.h
     MinersLib/RandomHash/RandomHashCPUMiner.h
@@ -151,6 +147,8 @@ set(SOURCES
     MinersLib/KernelOffsetManager.cpp
     MinersLib/Miner.cpp
     MinersLib/StratumClient.cpp
+    MinersLib/StratumClientVNet.cpp
+    MinersLib/StratumClientPASC.cpp
     MinersLib/wrapadl.cpp
     MinersLib/wrapamdsysfs.cpp
     MinersLib/wrapnvml.cpp
@@ -204,7 +202,6 @@ message(STATUS "Output directory is ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES})
 target_link_libraries(${PROJECT_NAME} ${RH_CUDA_LIB} ${LIBS} ${LIBRARIES} ${EXTRA_LIBS} ${JsonCpp_LIBRARY} ${CMAKE_DL_LIBS} ${Boost_ATOMIC_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${RH_OCLL})
-target_compile_options(${PROJECT_NAME} PRIVATE -Wno-inconsistent-missing-override)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wno-unused-function)
 
 
